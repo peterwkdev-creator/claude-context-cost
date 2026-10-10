@@ -7,7 +7,9 @@
 <meta name="color-scheme" content="light dark">
 <!-- Modelo da Coordenação (modelo/vitrine/LEIA-ME.md). Tudo o que muda por
      projeto está em vitrine.json e vitrine.py; esta página é igual em todos.
-     Pyodide fixado e com integridade: trocar a versão é trocar as duas. -->
+     Pyodide fixado; o integrity cobre só o pyodide.js (o wasm e a stdlib que
+     ele baixa vêm do mesmo endereço fixado, sem hash): trocar a versão é
+     trocar as duas. -->
 <script src="https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide.js"
         integrity="sha384-hYKrcQ7FiKU7f1c92md9N2eh7BoBVX4CPkNDfQyyVclsjZevvDOBUkajGcYk1EF8"
         crossorigin="anonymous"></script>
@@ -153,9 +155,12 @@ function montarCampos() {
   }
 }
 
-function usarExemplo() {
+function usarExemplo(valores = {}) {
   // Campo de arquivo vazio roda com o exemplo (lerEntradas): limpar é usar o exemplo.
-  for (const c of cfg.campos) $("campo-" + c.nome).value = c.tipo === "arquivo" ? "" : c.exemplo;
+  // "valores" vem de um dos "exemplos" a mais; o campo que ele não cita volta ao exemplo.
+  for (const c of cfg.campos) {
+    $("campo-" + c.nome).value = c.tipo === "arquivo" ? "" : (valores[c.nome] ?? c.exemplo);
+  }
   desatualizar();
   $("rodar").focus();
 }
@@ -314,7 +319,18 @@ async function iniciar() {
     $("titulo-marcado").textContent = textos.marcado;
     $("titulo-achados").textContent = textos.achados;
     montarCampos();
-    $("exemplo").addEventListener("click", usarExemplo);
+    $("exemplo").addEventListener("click", () => usarExemplo());
+    // um botão por exemplo a mais, na ordem do vitrine.json, depois do "Usar o exemplo"
+    let antes = $("exemplo");
+    for (const e of cfg.exemplos || []) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "secundario";
+      b.textContent = textos.exemplo + ": " + e.rotulo;
+      b.addEventListener("click", () => usarExemplo(e.valores));
+      antes.after(b);
+      antes = b;
+    }
     $("formulario").addEventListener("submit", rodar);
     $("formulario").addEventListener("keydown", (e) => {
       if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) $("formulario").requestSubmit();

@@ -22,8 +22,10 @@ class TestReadmeExamples(unittest.TestCase):
     def test_install_from_the_current_version_tag(self):
         # a release must not ship with the README still pointing at the previous tag
         from claude_context_cost import __version__
-        tags = re.findall(r"claude-context-cost@v([\d.]+)", README.read_text(encoding="utf-8"))
-        self.assertEqual(tags, [__version__])
+        # the tag may appear more than once (pip and uv); a sentence's final period stays out
+        tags = re.findall(r"claude-context-cost@v(\d+(?:\.\d+)*)", README.read_text(encoding="utf-8"))
+        self.assertTrue(tags, "the README does not install from the tag")
+        self.assertEqual(set(tags), {__version__})
 
 
 if __name__ == "__main__":

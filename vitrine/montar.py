@@ -8,8 +8,8 @@ raiz da biblioteca, ao lado de `index.html`, `vitrine.json` e `vitrine.py`.
     python vitrine/montar.py --saida X    monta em X
 
 Conferir = a configuração tem o que a página lê, e o adaptador, rodado aqui em
-Python normal com o exemplo de cada campo, devolve o formato que a página
-desenha. A página nunca recebe o que este script não aprovou.
+Python normal com o exemplo de cada campo (e com cada um dos `exemplos` a
+mais), devolve o formato que a página desenha. A página nunca recebe o que este script não aprovou.
 
 Montar = `index.html` e `vitrine.json` copiados, e `pacote.zip` com o pacote
 (sem `__pycache__`) mais `vitrine.py` na raiz do zip. Um arquivo só para o
@@ -27,7 +27,7 @@ AQUI = Path(__file__).resolve().parent
 TIPOS = {"textarea", "texto", "arquivo"}
 CHAVES_CAMPO = {"nome", "rotulo", "tipo", "exemplo"}
 OBRIGATORIAS = {"titulo", "descricao", "pacote", "campos", "botao", "repositorio"}
-OPCIONAIS = {"lang", "campo_marcado", "textos", "rodape", "links"}
+OPCIONAIS = {"lang", "campo_marcado", "textos", "rodape", "links", "exemplos"}
 CHAVES_RESULTADO = {"resumo", "aviso", "marcas", "tabela"}
 DATA_FIXA = (2020, 1, 1, 0, 0, 0)
 
@@ -67,6 +67,9 @@ def conferir_config(cfg):
             erros.append(f"campo_marcado {marcado!r} não é um dos campos")
         elif tipo == "arquivo":
             erros.append("campo_marcado não pode ser do tipo 'arquivo' (a página não o mostra)")
+    # nome de pacote, não caminho: "../outro" levaria ao zip público o que está fora da biblioteca
+    if not str(cfg.get("pacote", "")).isidentifier():
+        erros.append("'pacote' precisa ser o nome do pacote (letras, números e _), não um caminho")
     if not str(cfg.get("repositorio", "")).startswith("https://"):
         erros.append("'repositorio' precisa começar com https://")
     # links do rodapé (SN, 10/10: a lista de espera numa issue): só https://,
@@ -85,6 +88,31 @@ def conferir_config(cfg):
             erros.append(f"links[{i}]: 'texto' precisa ser texto não vazio")
         if not str(l.get("href", "")).startswith("https://"):
             erros.append(f"links[{i}]: 'href' precisa começar com https://")
+    # exemplos a mais (LS, 10/10: texto e HTML no mesmo campo): cada um troca
+    # o exemplo de alguns campos; o campo de arquivo fica de fora, porque a
+    # página não guarda valor nele (vazio, roda com o "exemplo" do campo).
+    exemplos = cfg.get("exemplos", [])
+    if not isinstance(exemplos, list):
+        erros.append("'exemplos' precisa ser lista")
+        exemplos = []
+    de_texto = {c.get("nome") for c in campos if c.get("tipo") != "arquivo"}
+    for i, e in enumerate(exemplos):
+        if not isinstance(e, dict):
+            erros.append(f"exemplos[{i}] não é objeto")
+            continue
+        for k in sorted(e.keys() - {"rotulo", "valores"}):
+            erros.append(f"exemplos[{i}]: chave desconhecida {k!r}")
+        if not isinstance(e.get("rotulo"), str) or not e.get("rotulo"):
+            erros.append(f"exemplos[{i}]: 'rotulo' precisa ser texto não vazio")
+        valores = e.get("valores")
+        if not isinstance(valores, dict) or not valores:
+            erros.append(f"exemplos[{i}]: 'valores' precisa ser objeto com ao menos um campo")
+            continue
+        for k, v in valores.items():
+            if k not in de_texto:
+                erros.append(f"exemplos[{i}]: {k!r} não é campo de texto")
+            if not isinstance(v, str):
+                erros.append(f"exemplos[{i}]: o valor de {k!r} precisa ser texto")
     return erros
 
 
@@ -138,7 +166,8 @@ def conferir_resultado(res, entradas, campo_marcado=None):
                 elif not all(isinstance(c, (str, int, float)) for c in linha):
                     erros.append(f"tabela: linha {i} tem célula que não é texto nem número")
     try:
-        json.dumps(res, ensure_ascii=False)
+        # NaN e Infinity viram JSON que o JSON.parse da página recusa
+        json.dumps(res, ensure_ascii=False, allow_nan=False)
     except (TypeError, ValueError) as e:
         erros.append(f"não vira JSON: {e}")
     return erros
@@ -164,15 +193,24 @@ def conferir(raiz):
         return erros
     if not (raiz / cfg["pacote"] / "__init__.py").is_file():
         return [f"pacote {cfg['pacote']!r} não encontrado em {raiz}"]
-    entradas = {c["nome"]: c["exemplo"] for c in cfg["campos"]}
-    res = carregar_adaptador(raiz).executar(entradas)
-    return [f"adaptador, com o exemplo: {e}" for e in conferir_resultado(res, entradas, cfg.get("campo_marcado"))]
+    padrao = {c["nome"]: c["exemplo"] for c in cfg["campos"]}
+    adaptador = carregar_adaptador(raiz)
+    erros = []
+    for rotulo, valores in [("o exemplo", {})] + [(f"o exemplo {e['rotulo']!r}", e["valores"])
+                                                   for e in cfg.get("exemplos", [])]:
+        entradas = {**padrao, **valores}
+        res = adaptador.executar(entradas)
+        erros += [f"adaptador, com {rotulo}: {e}" for e in conferir_resultado(res, entradas, cfg.get("campo_marcado"))]
+    return erros
 
 
 def arquivos_do_pacote(raiz, pacote):
     base = raiz / pacote
-    return sorted(p for p in base.rglob("*")
-                  if p.is_file() and "__pycache__" not in p.parts and p.suffix != ".pyc")
+    # ordem pelo texto do caminho: o Path do Windows ordena sem caixa, o do
+    # Linux com, e o zip mudaria de uma máquina para outra
+    return sorted((p for p in base.rglob("*")
+                   if p.is_file() and "__pycache__" not in p.parts and p.suffix != ".pyc"),
+                  key=lambda p: p.relative_to(raiz).as_posix())
 
 
 SAIDA = {"index.html", "vitrine.json", "pacote.zip"}
@@ -195,6 +233,10 @@ def montar(raiz, saida):
         for origem, nome in entradas:
             info = zipfile.ZipInfo(nome, DATA_FIXA)
             info.compress_type = zipfile.ZIP_DEFLATED
+            # Unix sempre (SN, 10/10): o padrão é o sistema que monta (0 no
+            # Windows, 3 no Linux do CI), e o zip mudaria de uma máquina para outra
+            info.create_system = 3
+            info.external_attr = 0o644 << 16
             z.writestr(info, origem.read_bytes())
     return [nome for _, nome in entradas]
 

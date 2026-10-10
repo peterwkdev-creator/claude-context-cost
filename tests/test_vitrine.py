@@ -10,6 +10,7 @@ import shutil
 import tempfile
 import unittest
 import zipfile
+from unittest import mock
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -27,6 +28,24 @@ def _valido():
         "marcas": [{"inicio": 0, "fim": 3, "rotulo": "Regra 1", "detalhe": "motivo"}],
         "tabela": {"titulo": "Regras", "colunas": ["Regra", "Trechos"], "linhas": [["1", 1]]},
     }
+
+
+def _com_campo(c, tipo):
+    """Nome de um campo do tipo pedido na configuração c, criando um se não houver
+    (a do CM só tem campo de arquivo; a da LS, só de texto)."""
+    for campo in c["campos"]:
+        if (campo["tipo"] == "arquivo") == (tipo == "arquivo"):
+            return campo["nome"]
+    c["campos"].append({"nome": "_plantado", "rotulo": "P", "tipo": tipo, "exemplo": "x"})
+    return "_plantado"
+
+
+def _com_texto(c):
+    return _com_campo(c, "texto")
+
+
+def _com_arquivo(c):
+    return _com_campo(c, "arquivo")
 
 
 class Projeto(unittest.TestCase):
@@ -88,13 +107,28 @@ class Projeto(unittest.TestCase):
             nomes = montar.montar(copia, Path(tmp) / "site")
             self.assertFalse([n for n in nomes if "__pycache__" in n or n.endswith(".pyc")], nomes)
 
+    def test_ordem_do_zip_com_caixa_como_no_linux(self):
+        # Maiúscula antes de minúscula, como o Linux do CI ordena; o Path do Windows não
+        with tempfile.TemporaryDirectory() as tmp:
+            copia = Path(tmp) / "raiz"
+            for pasta in ("vitrine", CFG["pacote"]):
+                shutil.copytree(RAIZ / pasta, copia / pasta,
+                                ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+            (copia / CFG["pacote"] / "a_plantado.txt").write_text("a", encoding="utf-8")
+            (copia / CFG["pacote"] / "B_plantado.txt").write_text("b", encoding="utf-8")
+            nomes = montar.montar(copia, Path(tmp) / "site")[:-1]  # o último é o vitrine.py
+            self.assertEqual(nomes, sorted(nomes))
+
     def test_zip_sem_data_da_montagem(self):
         # Mesma árvore, mesmo zip: nenhuma entrada leva a hora da montagem.
         with tempfile.TemporaryDirectory() as tmp:
             montar.montar(RAIZ, Path(tmp) / "site")
             with zipfile.ZipFile(Path(tmp) / "site" / "pacote.zip") as z:
                 datas = {i.date_time for i in z.infolist()}
+                sistemas = {(i.create_system, i.external_attr) for i in z.infolist()}
             self.assertEqual(datas, {(2020, 1, 1, 0, 0, 0)})
+            # nem o sistema que montou (SN, 10/10: 0 no Windows, 3 no Linux)
+            self.assertEqual(sistemas, {(3, 0o644 << 16)})
 
 
 class Contrato(unittest.TestCase):
@@ -120,6 +154,8 @@ class Contrato(unittest.TestCase):
             "célula objeto": lambda r: r["tabela"]["linhas"].append([{}, 1]),
             "sem colunas": lambda r: r["tabela"].pop("colunas"),
             "não vira JSON": lambda r: r.update(aviso={1}),
+            "célula NaN": lambda r: r["tabela"]["linhas"].append(["1", float("nan")]),
+            "célula infinita": lambda r: r["tabela"]["linhas"].append(["1", float("inf")]),
         }
         for nome, estragar in casos.items():
             with self.subTest(nome):
@@ -137,14 +173,27 @@ class Contrato(unittest.TestCase):
             "campo marcado inexistente": lambda c: c.update(campo_marcado="outro"),
             "chave errada": lambda c: c.update(titlo="x"),
             "chave de campo errada": lambda c: c["campos"][0].update(rotlo="x"),
+            # o 1º campo pode ser de arquivo, e aí o aceita vale (CM, 10/10)
             "aceita fora de arquivo": lambda c: c["campos"][0].update(tipo="textarea", aceita=".txt"),
             "repositório sem https": lambda c: c.update(repositorio="github.com/x"),
+            "pacote como caminho": lambda c: c.update(pacote="../outro"),
             "campos vazio": lambda c: c.update(campos=[]),
             "link javascript:": lambda c: c.update(links=[{"texto": "x", "href": "javascript:alert(1)"}]),
             "link http": lambda c: c.update(links=[{"texto": "x", "href": "http://exemplo.com"}]),
             "link sem texto": lambda c: c.update(links=[{"href": "https://exemplo.com"}]),
             "link com chave errada": lambda c: c.update(links=[{"texto": "x", "href": "https://e.com", "url": "x"}]),
             "links fora de lista": lambda c: c.update(links={"texto": "x"}),
+            "exemplos fora de lista": lambda c: c.update(exemplos={"rotulo": "x"}),
+            "exemplo sem rótulo": lambda c: c.update(exemplos=[{"valores": {_com_texto(c): "x"}}]),
+            "exemplo sem valores": lambda c: c.update(exemplos=[{"rotulo": "x", "valores": {}}]),
+            "exemplo com chave errada": lambda c: c.update(
+                exemplos=[{"rotulo": "x", "valores": {_com_texto(c): "x"}, "valor": "x"}]),
+            "exemplo de campo inexistente": lambda c: c.update(
+                exemplos=[{"rotulo": "x", "valores": {"inexistente": "x"}}]),
+            "exemplo de campo de arquivo": lambda c: c.update(
+                exemplos=[{"rotulo": "x", "valores": {_com_arquivo(c): "x"}}]),
+            "exemplo com valor número": lambda c: c.update(
+                exemplos=[{"rotulo": "x", "valores": {_com_texto(c): 1}}]),
         }
         for nome, estragar in casos.items():
             with self.subTest(nome):
@@ -161,6 +210,35 @@ class Contrato(unittest.TestCase):
         c = json.loads(json.dumps(CFG))
         c["links"] = [{"texto": "Lista de espera", "href": "https://github.com/dono/repo/issues/1"}]
         self.assertEqual(montar.conferir_config(c), [])
+
+    def test_exemplos_validos_passam(self):
+        c = json.loads(json.dumps(CFG))
+        c["exemplos"] = [{"rotulo": "HTML", "valores": {_com_texto(c): "<p>oi</p>"}}]
+        self.assertEqual(montar.conferir_config(c), [])
+
+    def test_conferir_roda_cada_exemplo(self):
+        # O adaptador recebe o padrão e, depois, cada exemplo por cima dele.
+        c = json.loads(json.dumps(CFG))
+        nome = _com_texto(c)
+        c["exemplos"] = [{"rotulo": "outro", "valores": {nome: "outro"}}]
+        recebidas = []
+
+        class Adaptador:
+            @staticmethod
+            def executar(entradas):
+                recebidas.append(dict(entradas))
+                return {"resumo": "ok"}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            raiz = Path(tmp)
+            (raiz / "vitrine").mkdir()
+            (raiz / "vitrine" / "vitrine.json").write_text(json.dumps(c), encoding="utf-8")
+            (raiz / c["pacote"]).mkdir(parents=True)
+            (raiz / c["pacote"] / "__init__.py").write_text("", encoding="utf-8")
+            with mock.patch.object(montar, "carregar_adaptador", return_value=Adaptador):
+                self.assertEqual(montar.conferir(raiz), [])
+        padrao = {x["nome"]: x["exemplo"] for x in c["campos"]}
+        self.assertEqual(recebidas, [padrao, {**padrao, nome: "outro"}])
 
 
 if __name__ == "__main__":
