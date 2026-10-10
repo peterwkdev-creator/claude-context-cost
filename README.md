@@ -1,0 +1,141 @@
+# claude-context-cost
+
+How much each source (your `CLAUDE.md`, rules, skills, memory, tool results)
+costs in the context of a Claude Code session, counted from the API `usage`
+recorded in its transcript, not estimated from characters.
+
+The usual estimate, characters / 4, **undercounts by 45%**: median over
+5,365 steps on the author's machine (2026-10-10; 453 pure-ASCII steps and
+4,912 Portuguese steps, both −45%). Every response adds up to its `usage`
+exactly, in all 74 transcripts tested.
+
+> Reads only the transcripts under `~/.claude/projects` on your machine.
+> Nothing is sent anywhere. The numbers are tokens, not dollars.
+
+## Install
+
+```bash
+pip install "git+https://github.com/peterwkdev-creator/claude-context-cost@v0.1.0"
+```
+
+Python 3.11 or newer, no dependencies.
+
+## Usage
+
+```bash
+claude-context-cost --example
+```
+
+```bash
+claude-context-cost ~/.claude/projects/<project-folder>/<session-id>.jsonl
+```
+
+Pass a folder instead of a file for one line per transcript. `--steps` shows
+what entered before each response, `--all` lists every source, `--json` is
+for scripts. On the synthetic example shipped with the package:
+
+```text
+        cost  share   entered    in    chars/4  error  how                  source
+     128,240  80.6%    36,640     7          -      -  -                    unattributed: system prompt, tools, overhead
+      10,400   6.5%     3,200     4      2,000   -38%  measured, split      tool: Read
+       5,600   3.5%     1,600     7      1,000   -38%  estimated            claude.md: CLAUDE.md
+       1,600   1.0%       800     4        500   -38%  split, estimated     path rule: .claude/rules/python.md
+```
+
+- **cost**: tokens × the responses the source stayed in context, until a
+  compaction removed it. This is what you pay for over the session.
+- **entered**: the tokens it brought in; **in**: the responses it stayed for.
+- **chars/4** and **error**: what the usual estimate would say, beside it.
+
+From Python:
+
+```python
+from claude_context_cost import analyze, example_path
+
+report = analyze(example_path())  # or the path of any .jsonl transcript
+print(report.total)  # 159160: input tokens summed over the 7 responses
+read = report.sources[("tool", "Read")]
+print(read.entered, read.responses, read.cost)  # 3200 4 10400
+print(read.estimate_div4)  # 2000.0: characters / 4 for the same text
+```
+
+## Why
+
+[claude-devtools](https://github.com/matt1398/claude-devtools) already shows
+the context by source. Read in its code at commit `1486f20` (the latest on
+2026-10-10):
+
+- Each source's tokens are characters / 4 (`src/main/utils/tokenizer.ts`);
+  only the turn total comes from the `usage`.
+- Rules in `.claude/rules/` are listed as global sources without reading
+  their `paths:`, so a rule that never loaded still counts. Issue
+  [#224](https://github.com/matt1398/claude-devtools/issues/224), open since
+  2026-07-17.
+- `CLAUDE.md` and rules are read from disk today, not as they were during the
+  session.
+
+This tool fixes the first two from the transcript alone.
+
+## What it counts
+
+- **One response per `message.id`.** A response is written over several
+  lines with the same `usage`; it counts once.
+- **Context = `input_tokens` + `cache_read_input_tokens` +
+  `cache_creation_input_tokens`.**
+- **What entered** between two responses is the context growth minus the
+  previous response's output. When a single source entered, its tokens are
+  **measured**. When several did, the growth is **split** by their size.
+- **At the start of the session and after each compaction** the context
+  jumps at once: each source is **estimated** with the bytes-per-token ratio
+  measured in the same transcript (median of its text-only steps; 2.25 when
+  it has fewer than 3), and the rest is **unattributed** (system prompt,
+  tool definitions). So every response adds up to its `usage`.
+- **Rules with `paths:`** count only from the response where Claude Code
+  loaded them (`nested_memory`), never before.
+- **Only what Claude Code rendered** into the context counts; bookkeeping
+  lines in the transcript do not.
+- **A compaction** removes everything; messages it keeps count as "kept by
+  compaction", not as new responses.
+
+## How it is tested
+
+- A synthetic transcript with known values (`tests/fixtures/build_example.py`)
+  where every source's tokens are worked out by hand: each one comes out
+  exact, every response adds up to its `usage`, a `paths:` rule that never
+  loaded counts 0, a response written over several lines counts once.
+- `python tests/mutate.py` breaks each of those rules in a copy of the code
+  (10 mutants); the tests catch all 10.
+- On the author's machine (2026-10-10): 74 real transcripts, 75,490
+  responses, 0 where the sources differ from the `usage`, 0 where the
+  response count differs from an independent count. The ratio was measured
+  in 50 of 73 transcripts, median 2.25 bytes per token. Run it on yours with
+  `CLAUDE_CONTEXT_COST_CORPUS=1 python -m unittest tests.test_corpus -v`
+  (it prints only counts).
+
+## Limits
+
+- **Split and estimated tokens are not measured.** The `how` column says
+  which is which. Many steps bring a tool result together with a small
+  reminder, so splitting is common.
+- **Output includes thinking.** Thinking may leave the context later, so
+  the previous output can be overcounted; the remainder then shows as
+  negative unattributed tokens (154 of 75,490 responses).
+- **One transcript at a time.** Subagent transcripts are not read.
+- **The pure-ASCII steps are code, logs and English text** from one
+  person's sessions; a corpus of English-language sessions has not been
+  measured yet.
+- The transcript format is not documented and changes between versions.
+
+## Compatibility
+
+Transcripts of Claude Code 2.1 (the synthetic fixture follows 2.1.293).
+Python 3.11 to 3.14, tested on Linux and Windows.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Never paste a real transcript in an
+issue or pull request: it holds paths, file contents and sometimes secrets.
+
+## License
+
+[MIT](LICENSE)

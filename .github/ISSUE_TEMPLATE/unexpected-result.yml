@@ -1,0 +1,38 @@
+name: Unexpected result
+description: The library gave a result that differs from your own count or from the source, or a case is missing.
+title: "Unexpected result: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use made-up data only: no names, IDs or real data about any person or company.
+        Never paste a real transcript: it holds paths, file contents and sometimes secrets.
+        Use a synthetic one (like `claude_context_cost/example.jsonl`) or a redacted excerpt
+        with only the line types and the `usage` numbers.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "Output of `python -m claude_context_cost --version`."
+    validations:
+      required: true
+  - type: textarea
+    id: input
+    attributes:
+      label: What you ran
+      description: The input and the command or Python call.
+    validations:
+      required: true
+  - type: textarea
+    id: got
+    attributes:
+      label: What the library returned
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and where it comes from
+      description: Your own count, the source or the rule.
+    validations:
+      required: true

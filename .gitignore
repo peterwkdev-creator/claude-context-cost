@@ -1,0 +1,15 @@
+# Secrets (standard block)
+.env*
+!.env.example
+*backup_codes*
+*recovery*codes*
+*.pem
+*.key
+.claude/settings.local.json
+
+__pycache__/
+*.pyc
+build/
+dist/
+*.egg-info/
+_site/

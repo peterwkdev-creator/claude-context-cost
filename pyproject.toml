@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "claude-context-cost"
+# One source for the version: the package's __version__ (read without importing).
+dynamic = ["version"]
+description = "How much each source (CLAUDE.md, rules, skills, memory, tool results) costs in the context of a Claude Code session, counted from the API usage in its transcript."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Peter" }]
+requires-python = ">=3.11"
+dependencies = []
+keywords = ["claude-code", "context-window", "tokens", "transcript", "cli"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+
+[project.scripts]
+claude-context-cost = "claude_context_cost.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/peterwkdev-creator/claude-context-cost"
+Issues = "https://github.com/peterwkdev-creator/claude-context-cost/issues"
+
+[tool.setuptools]
+packages = ["claude_context_cost"]
+
+# Non-.py files the package reads are installed only if listed here.
+[tool.setuptools.package-data]
+claude_context_cost = ["example.jsonl"]
+
+[tool.setuptools.dynamic]
+version = { attr = "claude_context_cost.__version__" }
