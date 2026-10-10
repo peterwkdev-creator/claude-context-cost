@@ -1,4 +1,4 @@
-"""The Python examples in the README run as they are, each block on its own."""
+"""The README: the Python examples run as they are, and the install points at the current version."""
 
 import re
 import unittest
@@ -16,6 +16,12 @@ class TestExemplosDoReadme(unittest.TestCase):
             # expected output and errors shown go in comments, never loose
             with self.subTest(bloco=i):
                 exec(compile(bloco, f"README, bloco {i}", "exec"), {})
+
+    def test_install_from_the_current_version_tag(self):
+        # a release must not ship with the README still pointing at the previous tag
+        from claude_context_cost import __version__
+        tags = re.findall(r"claude-context-cost@v([\d.]+)", README.read_text(encoding="utf-8"))
+        self.assertEqual(tags, [__version__])
 
 
 if __name__ == "__main__":

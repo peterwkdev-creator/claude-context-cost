@@ -3,7 +3,7 @@
 The version follows `claude_context_cost.__version__`; each one has a `vX.Y.Z` tag on
 the commit that released it.
 
-## 0.1.0 — unreleased
+## 0.1.0 — 2026-10-10
 
 - First public release: `claude-context-cost <transcript.jsonl | folder>`.
 - Context of every response from the API `usage`, one response per `message.id`.
