@@ -1,0 +1,34 @@
+{
+  "titulo": "claude-context-cost: what fills your Claude Code context",
+  "descricao": "Choose a Claude Code transcript and see how many input tokens each CLAUDE.md, rule, skill, memory and tool result cost, counted from the API usage the transcript records, next to the usual characters / 4 estimate.",
+  "lang": "en",
+  "pacote": "claude_context_cost",
+  "campos": [
+    {
+      "nome": "transcript",
+      "rotulo": "Transcript (.jsonl, from ~/.claude/projects). Without a file, the synthetic example runs.",
+      "tipo": "arquivo",
+      "exemplo": "",
+      "aceita": ".jsonl"
+    }
+  ],
+  "botao": "Count the context",
+  "repositorio": "https://github.com/peterwkdev-creator/claude-context-cost",
+  "rodape": "One transcript at a time; subagent transcripts are not read. The output count includes thinking.",
+  "textos": {
+    "carregando": "Loading Python in your browser (first visit only)…",
+    "pronto": "Ready. Run the synthetic example or choose one of your transcripts, then click the button.",
+    "executando": "Counting…",
+    "erro": "Could not run: ",
+    "alterado": "The file changed: run again to see the result.",
+    "exemplo": "Use the example",
+    "privacidade": "Your transcript never leaves your computer: the library runs here, in your browser, with no server.",
+    "marcado": "Text with the marked passages",
+    "achados": "Passages, one by one",
+    "nenhum": "No passage marked.",
+    "mostrar": "show",
+    "tabela": "Sources by cost",
+    "codigo": "Source code and license",
+    "motor": "Python in the browser via Pyodide 314.0.7"
+  }
+}

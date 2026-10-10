@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vitrine</title>
+<meta name="color-scheme" content="light dark">
+<!-- Modelo da Coordenação (modelo/vitrine/LEIA-ME.md). Tudo o que muda por
+     projeto está em vitrine.json e vitrine.py; esta página é igual em todos.
+     Pyodide fixado e com integridade: trocar a versão é trocar as duas. -->
+<script src="https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide.js"
+        integrity="sha384-hYKrcQ7FiKU7f1c92md9N2eh7BoBVX4CPkNDfQyyVclsjZevvDOBUkajGcYk1EF8"
+        crossorigin="anonymous"></script>
+<style>
+  /* Cor só por variável: o bloco escuro e o de impressão trocam as
+     variáveis, nunca um seletor (ux-padroes.md, "Três modos"). */
+  :root {
+    --fundo: #ffffff; --texto: #1a1a1a; --suave: #555555; --borda: #c8c8c8;
+    --marca: #ffe28a; --marca2: #ffb84d; --ativa: #b3261e;
+    --botao: #0b5cad; --botao-texto: #ffffff; --aviso: #f3f3f3; --link: #0b5cad;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fundo: #121212; --texto: #eeeeee; --suave: #bbbbbb; --borda: #4a4a4a;
+      --marca: #6b5300; --marca2: #8a4b00; --ativa: #ff8a80;
+      --botao: #4c9aff; --botao-texto: #000000; --aviso: #1e1e1e; --link: #7ab3ff;
+    }
+  }
+  @media print {
+    :root {
+      --fundo: #ffffff; --texto: #000000; --suave: #333333; --borda: #999999;
+      --marca: #ffe28a; --marca2: #ffb84d; --ativa: #000000;
+      --botao: #ffffff; --botao-texto: #000000; --aviso: #ffffff; --link: #000000;
+    }
+    form, .so-tela { display: none; }
+    mark { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto);
+         font: 1rem/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .pagina { max-width: 52rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+  h1 { font-size: 1.6rem; margin: 0 0 .25rem; }
+  h2 { font-size: 1.15rem; margin: 1.75rem 0 .5rem; }
+  p { margin: .5rem 0; }
+  a { color: var(--link); }
+  footer a { display: inline-block; padding: .2rem 0; }
+  .suave { color: var(--suave); }
+  label { display: block; font-weight: 600; margin: 1rem 0 .35rem; }
+  textarea, input[type=text] { width: 100%; padding: .6rem; font: inherit;
+         color: var(--texto); background: var(--fundo); border: 1px solid var(--borda); border-radius: 6px; }
+  textarea { min-height: 11rem; resize: vertical; }
+  /* Campo de arquivo: o botão do navegador sai com ~21 px; aqui fica como o secundário. */
+  input[type=file] { font: inherit; color: var(--texto); }
+  input[type=file]::file-selector-button { font: inherit; min-height: 2.5rem; padding: .5rem 1.1rem; margin-right: .75rem;
+         border-radius: 6px; border: 1px solid var(--borda); background: transparent; color: var(--texto); cursor: pointer; }
+  button { font: inherit; min-height: 2.5rem; padding: .5rem 1.1rem; border-radius: 6px;
+           border: 1px solid var(--botao); background: var(--botao); color: var(--botao-texto); cursor: pointer; }
+  button.secundario { background: transparent; color: var(--texto); border-color: var(--borda); }
+  button:disabled { opacity: .55; cursor: progress; }
+  :focus-visible { outline: 3px solid var(--ativa); outline-offset: 2px; }
+  .acoes { display: flex; gap: .75rem; flex-wrap: wrap; margin-top: 1rem; }
+  #estado { min-height: 1.6rem; font-weight: 600; }
+  .aviso { background: var(--aviso); border-left: 4px solid var(--borda); padding: .5rem .75rem; }
+  .marcado { white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid var(--borda);
+             border-radius: 6px; padding: .75rem; }
+  mark { background: var(--marca); color: var(--texto); border-radius: 2px; }
+  mark.dupla { background: var(--marca2); }
+  mark.ativa { outline: 2px solid var(--ativa); }
+  ol.achados { padding-left: 1.5rem; }
+  ol.achados li { margin: .5rem 0; }
+  ol.achados button { min-height: 1.75rem; padding: .1rem .6rem; }
+  .trecho { font-style: italic; }
+  table { border-collapse: collapse; width: 100%; margin-top: .5rem; }
+  th, td { text-align: left; border-bottom: 1px solid var(--borda); padding: .35rem .5rem; vertical-align: top; }
+  footer { margin-top: 2.5rem; border-top: 1px solid var(--borda); padding-top: 1rem; font-size: .9rem; }
+</style>
+</head>
+<body>
+<div class="pagina">
+  <header>
+    <h1 id="titulo">Vitrine</h1>
+    <p id="descricao" class="suave"></p>
+  </header>
+  <main>
+    <form id="formulario" novalidate>
+      <div id="campos"></div>
+      <div class="acoes">
+        <button id="rodar" type="submit" disabled>…</button>
+        <button id="exemplo" type="button" class="secundario"></button>
+      </div>
+    </form>
+    <p id="estado" role="status" aria-atomic="true"></p>
+    <section id="resultado" hidden aria-labelledby="estado">
+      <p id="aviso" class="aviso" hidden></p>
+      <div id="bloco-marcas" hidden>
+        <h2 id="titulo-marcado"></h2>
+        <div id="marcado" class="marcado"></div>
+        <h2 id="titulo-achados"></h2>
+        <ol id="achados" class="achados"></ol>
+      </div>
+      <div id="bloco-tabela" hidden>
+        <table id="tabela"><caption id="legenda" class="suave"></caption><thead></thead><tbody></tbody></table>
+      </div>
+    </section>
+  </main>
+  <footer>
+    <p id="privacidade"></p>
+    <p id="rodape" class="suave"></p>
+    <p id="links" class="suave" hidden></p>
+    <p class="suave"><a id="repositorio" href="#"></a> · <span id="motor"></span></p>
+  </footer>
+</div>
+<script>
+"use strict";
+// Textos da página; o vitrine.json troca qualquer um ("textos") e o idioma ("lang").
+const PADRAO = {
+  carregando: "Carregando o Python no navegador (só na primeira visita)…",
+  pronto: "Pronto. Edite o exemplo ou use o seu e clique no botão.",
+  executando: "Rodando…",
+  erro: "Não deu para rodar: ",
+  alterado: "A entrada mudou: rode de novo para ver o resultado.",
+  exemplo: "Usar o exemplo",
+  privacidade: "O que você digita não sai do seu computador: a biblioteca roda aqui, no navegador, sem servidor.",
+  marcado: "Texto com os trechos marcados",
+  achados: "Trechos, um por um",
+  nenhum: "Nenhum trecho marcado.",
+  mostrar: "mostrar",
+  tabela: "Detalhe",
+  codigo: "Código-fonte e licença",
+  motor: "Python no navegador pelo Pyodide 314.0.7",
+};
+const $ = (id) => document.getElementById(id);
+let cfg, textos, rodarPython;
+
+function estado(msg) { $("estado").textContent = msg; }
+
+function montarCampos() {
+  const caixa = $("campos");
+  for (const c of cfg.campos) {
+    const rotulo = document.createElement("label");
+    rotulo.htmlFor = "campo-" + c.nome;
+    rotulo.textContent = c.rotulo;
+    let el;
+    if (c.tipo === "textarea") el = document.createElement("textarea");
+    else { el = document.createElement("input"); el.type = c.tipo === "arquivo" ? "file" : "text"; }
+    el.id = "campo-" + c.nome;
+    el.name = c.nome;
+    if (c.tipo === "arquivo") {
+      if (c.aceita) el.accept = c.aceita;
+      el.addEventListener("change", desatualizar);
+    } else { el.value = c.exemplo; el.addEventListener("input", desatualizar); }
+    caixa.append(rotulo, el);
+  }
+}
+
+function usarExemplo() {
+  // Campo de arquivo vazio roda com o exemplo (lerEntradas): limpar é usar o exemplo.
+  for (const c of cfg.campos) $("campo-" + c.nome).value = c.tipo === "arquivo" ? "" : c.exemplo;
+  desatualizar();
+  $("rodar").focus();
+}
+
+function desatualizar() {
+  if ($("resultado").hidden) return;
+  $("resultado").hidden = true;
+  estado(textos.alterado);
+}
+
+async function lerEntradas() {
+  const entradas = {};
+  for (const c of cfg.campos) {
+    const el = $("campo-" + c.nome);
+    entradas[c.nome] = c.tipo === "arquivo"
+      ? (el.files[0] ? await el.files[0].text() : c.exemplo)
+      : el.value;
+  }
+  return entradas;
+}
+
+// Posições em pontos de código (Array.from), como o Python conta.
+function desenharMarcas(texto, marcas) {
+  const cps = Array.from(texto);
+  const cortes = new Set([0, cps.length]);
+  for (const m of marcas) { cortes.add(m.inicio); cortes.add(m.fim); }
+  const pontos = [...cortes].sort((a, b) => a - b);
+  const caixa = $("marcado");
+  caixa.replaceChildren();
+  for (let k = 0; k < pontos.length - 1; k++) {
+    const a = pontos[k], b = pontos[k + 1];
+    const pedaco = cps.slice(a, b).join("");
+    const cobre = [];
+    marcas.forEach((m, i) => { if (m.inicio <= a && m.fim >= b) cobre.push(i); });
+    if (!cobre.length) { caixa.append(pedaco); continue; }
+    const el = document.createElement("mark");
+    el.dataset.marcas = " " + cobre.join(" ") + " ";
+    if (cobre.length > 1) el.className = "dupla";
+    el.title = cobre.map((i) => marcas[i].rotulo).join(" · ");
+    el.textContent = pedaco;
+    caixa.append(el);
+  }
+  const lista = $("achados");
+  lista.replaceChildren();
+  if (!marcas.length) {
+    const li = document.createElement("li");
+    li.textContent = textos.nenhum;
+    lista.append(li);
+  }
+  marcas.forEach((m, i) => {
+    const li = document.createElement("li");
+    const forte = document.createElement("strong");
+    forte.textContent = m.rotulo + ": ";
+    const trecho = document.createElement("span");
+    trecho.className = "trecho";
+    const t = cps.slice(m.inicio, m.fim).join("");
+    trecho.textContent = "“" + (t.length > 140 ? t.slice(0, 140) + "…" : t) + "”";
+    li.append(forte, trecho);
+    if (m.detalhe) li.append(" — " + m.detalhe);
+    const botao = document.createElement("button");
+    botao.type = "button";
+    botao.className = "secundario so-tela";
+    botao.textContent = textos.mostrar;
+    botao.setAttribute("aria-label", textos.mostrar + " " + (i + 1) + ": " + m.rotulo);
+    botao.addEventListener("click", () => destacar(i));
+    li.append(" ", botao);
+    lista.append(li);
+  });
+}
+
+function destacar(i) {
+  let primeira = null;
+  for (const el of $("marcado").querySelectorAll("mark")) {
+    const sim = el.dataset.marcas.includes(" " + i + " ");
+    el.classList.toggle("ativa", sim);
+    if (sim && !primeira) primeira = el;
+  }
+  if (primeira) primeira.scrollIntoView({ block: "center", behavior: "smooth" });
+}
+
+function desenharTabela(t) {
+  $("legenda").textContent = t.titulo || textos.tabela;
+  const cab = document.createElement("tr");
+  for (const c of t.colunas) {
+    const th = document.createElement("th");
+    th.scope = "col";
+    th.textContent = c;
+    cab.append(th);
+  }
+  $("tabela").tHead.replaceChildren(cab);
+  const corpo = $("tabela").tBodies[0];
+  corpo.replaceChildren();
+  for (const linha of t.linhas) {
+    const tr = document.createElement("tr");
+    for (const v of linha) {
+      const td = document.createElement("td");
+      td.textContent = String(v);
+      tr.append(td);
+    }
+    corpo.append(tr);
+  }
+}
+
+async function rodar(evento) {
+  evento.preventDefault();
+  const botao = $("rodar");
+  botao.disabled = true;
+  $("resultado").setAttribute("aria-busy", "true");
+  estado(textos.executando);
+  try {
+    const entradas = await lerEntradas();
+    const res = JSON.parse(rodarPython(JSON.stringify(entradas)));
+    $("aviso").hidden = !res.aviso;
+    $("aviso").textContent = res.aviso || "";
+    const marcas = res.marcas || [];
+    $("bloco-marcas").hidden = !cfg.campo_marcado;
+    if (cfg.campo_marcado) desenharMarcas(entradas[cfg.campo_marcado], marcas);
+    $("bloco-tabela").hidden = !res.tabela;
+    if (res.tabela) desenharTabela(res.tabela);
+    $("resultado").hidden = false;
+    estado(res.resumo);
+  } catch (e) {
+    $("resultado").hidden = true;
+    estado(textos.erro + (e && e.message ? e.message.split("\n").filter(Boolean).pop() : e));
+  } finally {
+    $("resultado").removeAttribute("aria-busy");
+    botao.disabled = false;
+  }
+}
+
+async function iniciar() {
+  try {
+    cfg = await (await fetch("vitrine.json")).json();
+    textos = Object.assign({}, PADRAO, cfg.textos || {});
+    document.documentElement.lang = cfg.lang || "pt-BR";
+    document.title = cfg.titulo;
+    $("titulo").textContent = cfg.titulo;
+    $("descricao").textContent = cfg.descricao;
+    $("privacidade").textContent = textos.privacidade;
+    $("rodape").textContent = cfg.rodape || "";
+    // o montar.py já recusa href fora de https://; a página confere de novo
+    const links = (cfg.links || []).filter(l => /^https:\/\//.test(l.href));
+    links.forEach((l, i) => {
+      if (i) $("links").append(" · ");
+      const a = document.createElement("a");
+      a.href = l.href;
+      a.textContent = l.texto;
+      $("links").append(a);
+    });
+    $("links").hidden = !links.length;
+    $("repositorio").href = cfg.repositorio;
+    $("repositorio").textContent = textos.codigo;
+    $("motor").textContent = textos.motor;
+    $("rodar").textContent = cfg.botao;
+    $("exemplo").textContent = textos.exemplo;
+    $("titulo-marcado").textContent = textos.marcado;
+    $("titulo-achados").textContent = textos.achados;
+    montarCampos();
+    $("exemplo").addEventListener("click", usarExemplo);
+    $("formulario").addEventListener("submit", rodar);
+    $("formulario").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) $("formulario").requestSubmit();
+    });
+    estado(textos.carregando);
+    const [pyodide, zip] = await Promise.all([
+      loadPyodide(),
+      fetch("pacote.zip").then((r) => { if (!r.ok) throw new Error("pacote.zip: " + r.status); return r.arrayBuffer(); }),
+    ]);
+    pyodide.unpackArchive(zip, "zip", { extractDir: "/vitrine" });
+    rodarPython = pyodide.runPython([
+      "import json, sys",
+      "sys.path.insert(0, '/vitrine')",
+      "import vitrine",
+      "def _rodar(entradas):",
+      "    return json.dumps(vitrine.executar(json.loads(entradas)), ensure_ascii=False)",
+      "_rodar",
+    ].join("\n"));
+    $("rodar").disabled = false;
+    estado(textos.pronto);
+  } catch (e) {
+    estado((textos || PADRAO).erro + (e && e.message ? e.message : e));
+  }
+}
+iniciar();
+</script>
+</body>
+</html>

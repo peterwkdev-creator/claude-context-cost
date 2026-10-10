@@ -4,6 +4,10 @@ How much each source (your `CLAUDE.md`, rules, skills, memory, tool results)
 costs in the context of a Claude Code session, counted from the API `usage`
 recorded in its transcript, not estimated from characters.
 
+**[Try it in the browser](https://peterwkdev-creator.github.io/claude-context-cost/)**:
+choose one of your transcripts, or run the synthetic example. The library runs
+in the page (Pyodide); your file is never uploaded.
+
 The usual estimate, characters / 4, **undercounts by 45%**: median over
 5,365 steps on the author's machine (2026-10-10; 453 pure-ASCII steps and
 4,912 Portuguese steps, both −45%). Every response adds up to its `usage`
