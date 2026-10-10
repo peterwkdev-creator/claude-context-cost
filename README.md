@@ -4,6 +4,8 @@ How much each source (your `CLAUDE.md`, rules, skills, memory, tool results)
 costs in the context of a Claude Code session, counted from the API `usage`
 recorded in its transcript, not estimated from characters.
 
+![The page counts the synthetic example, then a transcript file](docs/demo.gif)
+
 **[Try it in the browser](https://peterwkdev-creator.github.io/claude-context-cost/)**:
 choose one of your transcripts, or run the synthetic example. The library runs
 in the page (Pyodide); your file is never uploaded.
