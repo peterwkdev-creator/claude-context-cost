@@ -15,7 +15,7 @@ exactly, in all 74 transcripts tested.
 ## Install
 
 ```bash
-pip install "git+https://github.com/peterwkdev-creator/claude-context-cost@v0.1.0"
+pip install "git+https://github.com/peterwkdev-creator/claude-context-cost@v1.0.0"
 ```
 
 Python 3.11 or newer, no dependencies.
@@ -130,6 +130,12 @@ This tool fixes the first two from the transcript alone.
 
 Transcripts of Claude Code 2.1 (the synthetic fixture follows 2.1.293).
 Python 3.11 to 3.14, tested on Linux and Windows.
+
+Versions follow [Semantic Versioning](https://semver.org/): the names in
+`claude_context_cost.__all__` and the keys of `--json` change incompatibly only
+in a new major version. The transcript format is Claude Code's and changes
+without notice; when it does, a fix keeps the API and ships as a minor or
+patch version.
 
 ## Contributing
 

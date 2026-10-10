@@ -15,7 +15,16 @@ requires-python = ">=3.11"
 dependencies = []
 keywords = ["claude-code", "context-window", "tokens", "transcript", "cli"]
 classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development",
 ]
 
 [project.scripts]

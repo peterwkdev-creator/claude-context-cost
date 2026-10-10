@@ -1,5 +1,7 @@
 """The README: the Python examples run as they are, and the install points at the current version."""
 
+import contextlib
+import io
 import re
 import unittest
 from pathlib import Path
@@ -7,15 +9,15 @@ from pathlib import Path
 README = Path(__file__).resolve().parents[1] / "README.md"
 
 
-class TestExemplosDoReadme(unittest.TestCase):
+class TestReadmeExamples(unittest.TestCase):
 
-    def test_blocos_python_rodam(self):
-        blocos = re.findall(r"```python\n(.*?)```", README.read_text(encoding="utf-8"), re.S)
-        self.assertGreaterEqual(len(blocos), 1)
-        for i, bloco in enumerate(blocos, 1):
+    def test_python_blocks_run(self):
+        blocks = re.findall(r"```python\n(.*?)```", README.read_text(encoding="utf-8"), re.S)
+        self.assertGreaterEqual(len(blocks), 1)
+        for i, block in enumerate(blocks, 1):
             # expected output and errors shown go in comments, never loose
-            with self.subTest(bloco=i):
-                exec(compile(bloco, f"README, bloco {i}", "exec"), {})
+            with self.subTest(block=i), contextlib.redirect_stdout(io.StringIO()):
+                exec(compile(block, f"README, block {i}", "exec"), {})
 
     def test_install_from_the_current_version_tag(self):
         # a release must not ship with the README still pointing at the previous tag

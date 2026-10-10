@@ -3,6 +3,15 @@
 The version follows `claude_context_cost.__version__`; each one has a `vX.Y.Z` tag on
 the commit that released it.
 
+## 1.0.0 — 2026-10-10
+
+- Stable API: the names in `claude_context_cost.__all__` (`analyze`, `read`,
+  `attribute`, `Report`, `Source`, `example_path`, `__version__`) and the keys of
+  `--json` change incompatibly only in a new major version (see Compatibility in the
+  README). The counting is the same as in 0.1.0.
+- Package metadata: classifiers for the supported Python versions and status.
+- Tests: the README check runs its examples without printing to the test output.
+
 ## 0.1.0 — 2026-10-10
 
 - First public release: `claude-context-cost <transcript.jsonl | folder>`.

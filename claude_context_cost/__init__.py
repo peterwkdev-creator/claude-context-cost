@@ -4,7 +4,7 @@ from pathlib import Path
 from .attribute import Report, Source, analyze, attribute
 from .transcript import read
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"
 __all__ = ["Report", "Source", "analyze", "attribute", "example_path", "read", "__version__"]
 
 
