@@ -1,0 +1,17 @@
+# Dependabot só para as actions dos workflows (modelo da Coordenação,
+# modelo/publico/LEIA-ME.md). Mora em .github/dependabot.yml e liga sozinho
+# com o arquivo no main, sem mexer em Settings. Um PR por mês com todas as
+# actions juntas; ele só entra com o CI verde e o sim do usuário na sessão do
+# projeto. Nasceu em 10/10/2026: o NP e a NS rodavam checkout@v4 e
+# setup-node@v4 com o aviso de Node 20 descontinuado, achado só na revisão.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci"
