@@ -1,6 +1,8 @@
 # Showcase on GitHub Pages: the library running in the browser (Pyodide).
 # Pages source: Settings -> Pages -> Source: "GitHub Actions" (once).
-# Action versions checked on 2026-10-10 (latest release of each).
+# Action versions checked on 2026-10-10 (latest release of each). Tests and
+# build run read-only; Pages write and OIDC stay in the job that deploys, as in
+# GitHub's own Pages starter workflow.
 name: Vitrine
 on:
   push:
@@ -10,21 +12,18 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
   cancel-in-progress: false
 
 jobs:
-  publicar:
+  montar:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       # The same Python version that Pyodide 314 runs in the browser.
       - uses: actions/setup-python@v7
         with:
@@ -36,5 +35,16 @@ jobs:
       - uses: actions/upload-pages-artifact@v5
         with:
           path: _site
+
+  publicar:
+    needs: montar
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
       - id: deploy
         uses: actions/deploy-pages@v5

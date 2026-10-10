@@ -158,10 +158,15 @@ function montarCampos() {
 function usarExemplo(valores = {}) {
   // Campo de arquivo vazio roda com o exemplo (lerEntradas): limpar é usar o exemplo.
   // "valores" vem de um dos "exemplos" a mais; o campo que ele não cita volta ao exemplo.
+  // Só desatualiza se algo mudou: o mesmo exemplo de novo não esconde o resultado (SN, 10/10).
+  let mudou = false;
   for (const c of cfg.campos) {
-    $("campo-" + c.nome).value = c.tipo === "arquivo" ? "" : (valores[c.nome] ?? c.exemplo);
+    const el = $("campo-" + c.nome);
+    const novo = c.tipo === "arquivo" ? "" : (valores[c.nome] ?? c.exemplo);
+    if (c.tipo === "arquivo" ? el.files.length > 0 : el.value !== novo) mudou = true;
+    el.value = novo;
   }
-  desatualizar();
+  if (mudou) desatualizar();
   $("rodar").focus();
 }
 
