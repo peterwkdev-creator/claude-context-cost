@@ -14,7 +14,7 @@
   ],
   "botao": "Count the context",
   "repositorio": "https://github.com/peterwkdev-creator/claude-context-cost",
-  "rodape": "One transcript at a time; subagent transcripts are not read. The output count includes thinking.",
+  "rodape": "One transcript at a time; a session's total does not include its subagents (each has its own file). The output count includes thinking.",
   "textos": {
     "carregando": "Loading Python in your browser (first visit only)…",
     "pronto": "Ready. Run the synthetic example or choose one of your transcripts, then click the button.",

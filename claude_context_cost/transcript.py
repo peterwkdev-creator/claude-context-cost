@@ -192,11 +192,28 @@ def _user_items(entry, tool_names):
     return items
 
 
+def _subagent_only(path):
+    """A subagent's own transcript (`subagents/agent-*.jsonl`) has only sidechain messages."""
+    side = False
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            try:
+                e = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(e, dict) and e.get("type") in ("user", "assistant"):
+                if not e.get("isSidechain"):
+                    return False
+                side = True
+    return side
+
+
 def read(path):
     """Parse one transcript. Lines that are not JSON objects are counted, not fatal."""
     responses, pending = [], []
     seen_segment, seen_ever, tool_names = set(), set(), {}
     cwd, segment_start, compactions, bad = "", True, 0, 0
+    skip_side = not _subagent_only(path)   # in a session's transcript, sidechains are other contexts
     with open(path, encoding="utf-8", errors="replace") as fh:
         for n, line in enumerate(fh, 1):
             try:
@@ -207,7 +224,7 @@ def read(path):
             if not isinstance(e, dict):
                 bad += 1
                 continue
-            if e.get("isSidechain"):
+            if skip_side and e.get("isSidechain"):
                 continue
             cwd = e.get("cwd") or cwd
             t = e.get("type")

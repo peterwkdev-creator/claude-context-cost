@@ -150,5 +150,41 @@ class TestInstructionsSplit(unittest.TestCase):
         self.assertEqual(got, [("CLAUDE.md", len(short) + 10), ("instructions wrapper", 7)])
 
 
+class TestSubagentTranscript(unittest.TestCase):
+    """A subagent's own transcript has only sidechain lines; inside a session they are skipped."""
+
+    def rewrite(self, change):
+        import json
+        import tempfile
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        lines = []
+        for line in example_path().read_text(encoding="utf-8").splitlines():
+            try:
+                e = json.loads(line)
+            except ValueError:
+                lines.append(line)
+                continue
+            lines.extend(json.dumps(x) for x in change(e))
+        f = Path(tmp.name) / "agent-a1.jsonl"
+        f.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return analyze(f)
+
+    def test_subagent_file_counts_like_a_session(self):
+        rep = self.rewrite(lambda e: [{**e, "isSidechain": True}])
+        self.assertEqual([r.ledger for r in rep.responses], EXPECTED_LEDGERS)
+        self.assertEqual({k: s.cost for k, s in rep.sources.items()}, EXPECTED_COST)
+
+    def test_sidechain_lines_in_a_session_are_skipped(self):
+        def add_side(e):
+            if e.get("type") != "assistant":
+                return [e]
+            m = {**e["message"], "id": e["message"]["id"] + "_side"}
+            return [e, {**e, "isSidechain": True, "message": m}]
+        rep = self.rewrite(add_side)
+        self.assertEqual([r.id for r in rep.responses], [f"msg_0{i}" for i in range(1, 8)])
+        self.assertEqual([r.ledger for r in rep.responses], EXPECTED_LEDGERS)
+
+
 if __name__ == "__main__":
     unittest.main()

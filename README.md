@@ -10,10 +10,10 @@ recorded in its transcript, not estimated from characters.
 choose one of your transcripts, or run the synthetic example. The library runs
 in the page (Pyodide); your file is never uploaded.
 
-The usual estimate, characters / 4, **undercounts by 45%**: median over
-5,365 steps on the author's machine (2026-10-10; 453 pure-ASCII steps and
-4,912 Portuguese steps, both −45%). Every response adds up to its `usage`
-exactly, in all 74 transcripts tested.
+The usual estimate, characters / 4, **undercounts by 40 to 45%**: −45% over
+5,365 steps of the author's sessions, mostly in Portuguese, and −40% in an
+English-language session (2026-10-10). Here every response adds up to its
+`usage` exactly, in all 457 transcripts tested.
 
 > Reads only the transcripts under `~/.claude/projects` on your machine.
 > Nothing is sent anywhere. The numbers are tokens, not dollars.
@@ -21,7 +21,7 @@ exactly, in all 74 transcripts tested.
 ## Install
 
 ```bash
-pip install "git+https://github.com/peterwkdev-creator/claude-context-cost@v1.1.0"
+pip install "git+https://github.com/peterwkdev-creator/claude-context-cost@v1.2.0"
 ```
 
 Python 3.11 or newer, no dependencies.
@@ -35,6 +35,10 @@ claude-context-cost --example
 ```bash
 claude-context-cost ~/.claude/projects/<project-folder>/<session-id>.jsonl
 ```
+
+The newest `.jsonl` in a project's folder is its latest session (on Windows,
+`~` is `%USERPROFILE%`). A subagent has its own transcript,
+`<session-id>/subagents/agent-<id>.jsonl`.
 
 Pass a folder instead of a file for one line per transcript. `--steps` shows
 what entered before each response, `--all` lists every source, `--json` is
@@ -111,11 +115,12 @@ This tool fixes the first two from the transcript alone.
   exact, every response adds up to its `usage`, a `paths:` rule that never
   loaded counts 0, a response written over several lines counts once.
 - `python tests/mutate.py` breaks each of those rules in a copy of the code
-  (10 mutants); the tests catch all 10.
-- On the author's machine (2026-10-10): 74 real transcripts, 75,490
-  responses, 0 where the sources differ from the `usage`, 0 where the
-  response count differs from an independent count. The ratio was measured
-  in 50 of 73 transcripts, median 2.25 bytes per token. Run it on yours with
+  (13 mutants); the tests catch all 13.
+- On the author's machine (2026-10-10): 75 session transcripts and 382
+  subagent transcripts, 91,347 responses, 0 where the sources differ from the
+  `usage`, 0 where the response count differs from an independent count. The
+  ratio was measured in 50 of the 73 sessions with responses, median 2.22
+  bytes per token. Run it on yours with
   `CLAUDE_CONTEXT_COST_CORPUS=1 python -m unittest tests.test_corpus -v`
   (it prints only counts).
 
@@ -126,11 +131,13 @@ This tool fixes the first two from the transcript alone.
   reminder, so splitting is common.
 - **Output includes thinking.** Thinking may leave the context later, so
   the previous output can be overcounted; the remainder then shows as
-  negative unattributed tokens (154 of 75,490 responses).
-- **One transcript at a time.** Subagent transcripts are not read.
-- **The pure-ASCII steps are code, logs and English text** from one
-  person's sessions; a corpus of English-language sessions has not been
-  measured yet.
+  negative unattributed tokens (191 of 91,347 responses).
+- **One transcript at a time.** A session's total does not include its
+  subagents; pass a subagent's file to count it.
+- **English was measured in one session** (2026-10-10): 8 file reads, a
+  license, release notes, two READMEs, three Python modules and a git log;
+  median −40%, from −29% to −47%. The other numbers come from one person's
+  sessions, mostly in Portuguese.
 - The transcript format is not documented and changes between versions.
 
 ## Compatibility

@@ -3,6 +3,15 @@
 The version follows `claude_context_cost.__version__`; each one has a `vX.Y.Z` tag on
 the commit that released it.
 
+## 1.2.0 — 2026-10-10
+
+- A subagent's own transcript (`<session-id>/subagents/agent-<id>.jsonl`) is read; it
+  showed 0 responses, because all its lines are marked as a sidechain. Inside a
+  session's transcript, sidechain lines are still skipped.
+- The corpus test also checks subagent transcripts: 382 on the author's machine,
+  0 where the sources differ from the `usage`.
+- README: the characters / 4 error measured in one English-language session (−40%).
+
 ## 1.1.0 — 2026-10-10
 
 - Fix: two instruction files with the same content, or one inside another, were
