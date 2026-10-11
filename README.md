@@ -21,10 +21,15 @@ English-language session (2026-10-10). Here every response adds up to its
 ## Install
 
 ```bash
-pip install "git+https://github.com/peterwkdev-creator/claude-context-cost@v1.3.0"
+pip install claude-context-cost
 ```
 
-Python 3.11 or newer, no dependencies.
+Python 3.11 or newer, no dependencies. To install a tagged version straight
+from GitHub instead:
+
+```bash
+pip install "git+https://github.com/peterwkdev-creator/claude-context-cost@v1.3.1"
+```
 
 ## Usage
 

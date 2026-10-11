@@ -5,7 +5,7 @@ from .attribute import Report, Source, analyze, attribute
 from .summary import Summary, Total, summarize
 from .transcript import read
 
-__version__ = "1.3.0"
+__version__ = "1.3.1"
 __all__ = ["Report", "Source", "analyze", "attribute", "example_path", "read", "Summary", "summarize",
            "Total", "__version__"]
 

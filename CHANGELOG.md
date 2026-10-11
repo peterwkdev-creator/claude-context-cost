@@ -3,6 +3,15 @@
 The version follows `claude_context_cost.__version__`; each one has a `vX.Y.Z` tag on
 the commit that released it.
 
+## 1.3.1 — 2026-10-11
+
+- Published on PyPI: `pip install claude-context-cost`. Each Release publishes
+  through trusted publishing (OIDC), with no stored token, after the tests and
+  a check of the installed package.
+- CI builds the package on every push, installs the wheel outside the checkout
+  and runs the README example through the command and the API.
+- No change in the library.
+
 ## 1.3.0 — 2026-10-11
 
 - A folder is summed: a project's folder with its sessions and their subagents,
