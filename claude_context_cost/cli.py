@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from . import __version__, example_path
-from .attribute import analyze
+from .attribute import FLOOR, analyze
 
 TOP = 20
 
@@ -58,8 +58,7 @@ def print_steps(rep, out):
         for i in r.entered:
             out.write(f"    {i.tokens:>+9,}  {label(i.key)} ({i.bytes:,} B, {i.how})\n")
         before = {} if (r.segment_start or prev is None) else prev.ledger
-        rest = r.ledger.get(("unattributed", "system prompt, tools, overhead"), 0) \
-            - before.get(("unattributed", "system prompt, tools, overhead"), 0)
+        rest = r.ledger.get(FLOOR, 0) - before.get(FLOOR, 0)
         if rest:
             out.write(f"    {rest:>+9,}  unattributed\n")
         prev = r
@@ -69,7 +68,7 @@ def as_json(rep):
     return {
         "file": Path(rep.path).name, "version": __version__,
         "responses": len(rep.responses), "compactions": rep.compactions, "total": rep.total,
-        "bytes_per_token": rep.bytes_per_token, "ratio_pairs": rep.ratio_pairs,
+        "bad_lines": rep.bad_lines, "bytes_per_token": rep.bytes_per_token, "ratio_pairs": rep.ratio_pairs,
         "ratio_is_default": rep.ratio_is_default,
         "sources": [{"kind": s.kind, "name": s.name, "cost": s.cost, "entered": s.entered,
                      "responses": s.responses, "bytes": s.bytes, "chars": s.chars, "how": s.how}
@@ -81,17 +80,31 @@ def as_json(rep):
     }
 
 
-def print_folder(folder, out):
+def print_folder(folder, out, as_json_output=False):
     files = sorted(folder.glob("*.jsonl"), key=lambda p: p.stat().st_mtime)
     if not files:
-        out.write(f"no .jsonl transcripts in {folder}\n")
+        if as_json_output:
+            json.dump({"folder": folder.name, "version": __version__, "transcripts": []}, out, indent=1)
+            out.write("\n")
+        else:
+            out.write(f"no .jsonl transcripts in {folder}\n")
         return 1
-    out.write(f"{len(files)} transcripts in {folder.name} (oldest first); run on one file for the detail\n")
+    rows = []
     for f in files:
         rep = analyze(f)
         top = max(rep.sources.values(), key=lambda s: s.cost, default=None)
-        top_txt = f"top: {label((top.kind, top.name))} {top.cost / (rep.total or 1):.0%}" if top else ""
-        out.write(f"  {f.name}  {len(rep.responses):>5} responses  {rep.total:>13,} tokens  {top_txt}\n")
+        rows.append({"file": f.name, "responses": len(rep.responses), "compactions": rep.compactions,
+                     "total": rep.total,
+                     "top": {"kind": top.kind, "name": top.name, "cost": top.cost} if top else None})
+    if as_json_output:
+        json.dump({"folder": folder.name, "version": __version__, "transcripts": rows}, out, indent=1)
+        out.write("\n")
+        return 0
+    out.write(f"{len(files)} transcripts in {folder.name} (oldest first); run on one file for the detail\n")
+    for r in rows:
+        top = r["top"]
+        top_txt = f"top: {label((top['kind'], top['name']))} {top['cost'] / (r['total'] or 1):.0%}" if top else ""
+        out.write(f"  {r['file']}  {r['responses']:>5} responses  {r['total']:>13,} tokens  {top_txt}\n")
     return 0
 
 
@@ -117,7 +130,9 @@ def main(argv=None):
     else:
         ap.error("give a transcript or a folder, or --example")
     if target.is_dir():
-        return print_folder(target, out)
+        if a.steps or a.all:
+            ap.error("--steps and --all need one transcript, not a folder")
+        return print_folder(target, out, a.json)
     if not target.is_file():
         ap.error(f"not found: {target}")
     rep = analyze(target)

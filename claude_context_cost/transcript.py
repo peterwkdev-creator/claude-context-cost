@@ -92,16 +92,22 @@ def _rendered_text(rendered):
 
 
 def _split(text, files, wrapper):
-    """Each file found verbatim in the rendered text is its own item; the rest is the wrapper."""
-    items, used_b, used_c = [], 0, 0
-    for kind, name, content in files:
-        if content and content in text:
-            it = _item(kind, name, content)
-            items.append(it)
-            used_b, used_c = used_b + it.bytes, used_c + it.chars
-    rest_b = len(text.encode("utf-8")) - used_b
+    """Each file found verbatim in the rendered text is its own item; the rest is the wrapper.
+
+    A match is taken out of the text before the next file is looked up, longest
+    first: two files with the same content, or one inside another, are counted
+    only as many times as they appear.
+    """
+    found, rest = {}, text
+    for n in sorted(range(len(files)), key=lambda n: -len(files[n][2])):
+        kind, name, content = files[n]
+        if content and content in rest:
+            found[n] = _item(kind, name, content)
+            rest = rest.replace(content, "", 1)
+    items = [found[n] for n in sorted(found)]   # in the order Claude Code listed them
+    rest_b = len(rest.encode("utf-8"))
     if rest_b > 0:
-        items.append(Item("attachment", wrapper, rest_b, len(text) - used_c))
+        items.append(Item("attachment", wrapper, rest_b, len(rest)))
     return items
 
 

@@ -21,7 +21,7 @@ exactly, in all 74 transcripts tested.
 ## Install
 
 ```bash
-pip install "git+https://github.com/peterwkdev-creator/claude-context-cost@v1.0.0"
+pip install "git+https://github.com/peterwkdev-creator/claude-context-cost@v1.1.0"
 ```
 
 Python 3.11 or newer, no dependencies.
@@ -38,7 +38,8 @@ claude-context-cost ~/.claude/projects/<project-folder>/<session-id>.jsonl
 
 Pass a folder instead of a file for one line per transcript. `--steps` shows
 what entered before each response, `--all` lists every source, `--json` is
-for scripts. On the synthetic example shipped with the package:
+for scripts (for a folder too). On the synthetic example shipped with the
+package:
 
 ```text
         cost  share   entered    in    chars/4  error  how                  source

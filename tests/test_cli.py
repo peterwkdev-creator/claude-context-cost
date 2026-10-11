@@ -1,4 +1,5 @@
 """The command line, run the way a user runs it."""
+import contextlib
 import io
 import json
 import os
@@ -53,6 +54,21 @@ class TestCli(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("a.jsonl", out)
         self.assertIn("159,160 tokens", out)
+
+    def test_folder_as_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            shutil.copy(example_path(), Path(tmp) / "a.jsonl")
+            code, out = run_main(tmp, "--json")
+        self.assertEqual(code, 0)
+        rows = json.loads(out)["transcripts"]
+        self.assertEqual([(r["file"], r["responses"], r["total"]) for r in rows], [("a.jsonl", 7, 159160)])
+        self.assertEqual(rows[0]["top"]["kind"], "unattributed")
+
+    def test_folder_refuses_per_transcript_options(self):
+        with tempfile.TemporaryDirectory() as tmp, redirect_stdout(io.StringIO()):
+            shutil.copy(example_path(), Path(tmp) / "a.jsonl")
+            with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+                main([tmp, "--steps"])
 
     def test_version_as_a_module(self):
         p = subprocess.run([sys.executable, "-m", "claude_context_cost", "--version"],

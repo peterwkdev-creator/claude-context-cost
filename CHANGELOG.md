@@ -3,6 +3,19 @@
 The version follows `claude_context_cost.__version__`; each one has a `vX.Y.Z` tag on
 the commit that released it.
 
+## 1.1.0 — 2026-10-10
+
+- Fix: two instruction files with the same content, or one inside another, were
+  each counted in full; now each byte of the rendered text counts once. It did not
+  happen in the 1,233 instruction and skill attachments of the author's 74
+  transcripts, so their numbers do not change.
+- `--json` on a folder prints one object per transcript (it printed text);
+  `--steps` and `--all` on a folder now stop with an error instead of being ignored.
+- `--json` gains `bad_lines`, the lines skipped because they are not JSON.
+- The showcase build and its tests follow the updated template; the Pages
+  workflow builds read-only and deploys in a separate job; Dependabot keeps the
+  workflow actions current.
+
 ## 1.0.0 — 2026-10-10
 
 - Stable API: the names in `claude_context_cost.__all__` (`analyze`, `read`,

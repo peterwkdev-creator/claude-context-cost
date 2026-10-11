@@ -120,5 +120,35 @@ class TestAcceptance(unittest.TestCase):
         self.assertEqual(example_path().read_bytes(), mod.build().encode("ascii"))
 
 
+class TestInstructionsSplit(unittest.TestCase):
+    """Files inside one `instructions` attachment: each byte of the rendered text counts once."""
+
+    def entered(self, files, rendered):
+        import json
+        import tempfile
+        from claude_context_cost import read
+        att = {"type": "attachment", "cwd": "/home/dev/demo", "rendered": rendered,
+               "attachment": {"type": "instructions", "files": files}}
+        call = {"type": "assistant", "message": {"id": "m1", "content": [], "usage": {"input_tokens": 900}}}
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Path(tmp) / "t.jsonl"
+            f.write_text(json.dumps(att) + "\n" + json.dumps(call) + "\n", encoding="utf-8")
+            return [(i.name, i.bytes) for i in read(f).responses[0].entered]
+
+    def test_same_content_twice_counts_where_it_appears(self):
+        body = "Answer in English. " * 20
+        files = [{"path": "/home/dev/demo/CLAUDE.md", "type": "Project", "content": body},
+                 {"path": "/home/dev/demo/sub/CLAUDE.md", "type": "Project", "content": body}]
+        got = self.entered(files, f"<a>{body}</a>")
+        self.assertEqual(got, [("CLAUDE.md", len(body)), ("instructions wrapper", 7)])
+
+    def test_file_inside_another_is_not_counted_again(self):
+        short = "Use tabs. " * 10
+        files = [{"path": "/home/dev/demo/.claude/rules/a.md", "type": "Project", "content": short},
+                 {"path": "/home/dev/demo/CLAUDE.md", "type": "Project", "content": short + "And tests."}]
+        got = self.entered(files, f"<a>{short}And tests.</a>")
+        self.assertEqual(got, [("CLAUDE.md", len(short) + 10), ("instructions wrapper", 7)])
+
+
 if __name__ == "__main__":
     unittest.main()
