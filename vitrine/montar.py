@@ -1,6 +1,6 @@
 """Monta a vitrine: a página que roda a biblioteca no navegador (Pyodide).
 
-Modelo da Coordenação (`modelo/vitrine/LEIA-ME.md`). Mora em `vitrine/` na
+Mora em `vitrine/` na
 raiz da biblioteca, ao lado de `index.html`, `vitrine.json` e `vitrine.py`.
 
     python vitrine/montar.py              confere e monta em _site/
@@ -72,7 +72,7 @@ def conferir_config(cfg):
         erros.append("'pacote' precisa ser o nome do pacote (letras, números e _), não um caminho")
     if not str(cfg.get("repositorio", "")).startswith("https://"):
         erros.append("'repositorio' precisa começar com https://")
-    # links do rodapé (SN, 10/10: a lista de espera numa issue): só https://,
+    # links do rodapé (a lista de espera numa issue, por exemplo): só https://,
     # para um javascript: no vitrine.json não virar link na página.
     links = cfg.get("links", [])
     if not isinstance(links, list):
@@ -88,7 +88,7 @@ def conferir_config(cfg):
             erros.append(f"links[{i}]: 'texto' precisa ser texto não vazio")
         if not str(l.get("href", "")).startswith("https://"):
             erros.append(f"links[{i}]: 'href' precisa começar com https://")
-    # exemplos a mais (LS, 10/10: texto e HTML no mesmo campo): cada um troca
+    # exemplos a mais (texto e HTML no mesmo campo, por exemplo): cada um troca
     # o exemplo de alguns campos; o campo de arquivo fica de fora, porque a
     # página não guarda valor nele (vazio, roda com o "exemplo" do campo).
     exemplos = cfg.get("exemplos", [])
@@ -233,7 +233,7 @@ def montar(raiz, saida):
         for origem, nome in entradas:
             info = zipfile.ZipInfo(nome, DATA_FIXA)
             info.compress_type = zipfile.ZIP_DEFLATED
-            # Unix sempre (SN, 10/10): o padrão é o sistema que monta (0 no
+            # Unix sempre: o padrão é o sistema que monta (0 no
             # Windows, 3 no Linux do CI), e o zip mudaria de uma máquina para outra
             info.create_system = 3
             info.external_attr = 0o644 << 16
