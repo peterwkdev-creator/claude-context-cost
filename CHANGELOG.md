@@ -3,6 +3,18 @@
 The version follows `claude_context_cost.__version__`; each one has a `vX.Y.Z` tag on
 the commit that released it.
 
+## 1.6.0 — 2026-10-11
+
+From a first use in another project's git hook:
+
+- `--budget --quiet`: only the verdict and the limits exceeded, for a hook.
+- `--budget` names the repository it measured, and says what a session also
+  loads that it does not count: your `~/.claude/CLAUDE.md`, memory and any
+  `CLAUDE.md` above the repository. The README says which folder is measured
+  and where the budget file's path starts.
+- The `how` column widens when a source has three ways, so the `source`
+  column stays aligned.
+
 ## 1.5.1 — 2026-10-11
 
 - Clearer output: the legend explains every column (`share`, `in`, `chars/4`,

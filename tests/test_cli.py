@@ -53,6 +53,18 @@ class TestCli(unittest.TestCase):
         self.assertIn("claude-context-cost --example", buf.getvalue())
         self.assertIn("https://github.com/peterwkdev-creator/claude-context-cost", buf.getvalue())
 
+    def test_a_long_how_keeps_the_source_column_aligned(self):
+        from claude_context_cost import analyze
+        from claude_context_cost.cli import print_report
+        rep = analyze(example_path())
+        rep.sources[("tool", "Read")].how = {"split": 3, "estimated": 2, "measured": 1}
+        buf = io.StringIO()
+        print_report(rep, 20, buf)
+        rows = buf.getvalue().split("source\n", 1)[1].splitlines()
+        starts = {line.index("tool: Read") if "tool: Read" in line else line.index("claude.md: CLAUDE.md")
+                  for line in rows if "tool: Read" in line or "claude.md: CLAUDE.md" in line}
+        self.assertEqual(len(starts), 1)
+
     def test_steps(self):
         code, out = run_main("--example", "--steps")
         self.assertIn("#4 msg_04 context 25,000", out)

@@ -248,6 +248,16 @@ class TestBudgetCli(unittest.TestCase):
         self.assertIn("over budget: 1 limit exceeded\n", out)
         self.assertIn('  claude.md: docs/CLAUDE.md: 40 tokens > 39 (limit "docs/CLAUDE.md")', out)
 
+    def test_quiet_prints_only_the_verdict(self):
+        code, out, _ = self.run_budget('startup = 400\n', "--quiet")
+        self.assertEqual((code, out), (0, "within budget\n"))
+        code, out, _ = self.run_budget('startup = 399\n', "--quiet")
+        self.assertEqual((code, out), (1, "over budget: 1 limit exceeded\n"
+                                          "  start-up total: 400 tokens > 399 (limit startup)\n"))
+        with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as e:
+            main(["--example", "--quiet"])
+        self.assertEqual(e.exception.code, 2)
+
     def test_json(self):
         code, out, _ = self.run_budget('startup = 399\n', "--json")
         d = json.loads(out)
@@ -264,8 +274,9 @@ class TestBudgetCli(unittest.TestCase):
     def test_the_readme_example_is_the_real_output(self):
         readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(encoding="utf-8")
         toml = re.search(r"```toml\n(# context-budget\.toml.*?)```", readme, re.S).group(1)
-        shown = re.search(r"```text\n(context budget:.*?)```", readme, re.S).group(1)
-        with tempfile.TemporaryDirectory() as tmp:
+        shown = re.search(r"```text\n(context budget of.*?)```", readme, re.S).group(1)
+        with tempfile.TemporaryDirectory() as parent:
+            tmp = str(Path(parent) / "my-repo")
             write(tmp, {
                 "CLAUDE.md": "# Project\n" + "Rules of the house. " * 190 + "\nSee @docs/architecture.md\n",
                 "docs/architecture.md": "Architecture notes. " * 120,

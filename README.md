@@ -36,7 +36,7 @@ Python 3.11 or newer, no dependencies. To install a tagged version straight
 from GitHub instead:
 
 ```bash
-pip install "git+https://github.com/peterwkdev-creator/claude-context-cost@v1.5.1"
+pip install "git+https://github.com/peterwkdev-creator/claude-context-cost@v1.6.0"
 ```
 
 ## Usage
@@ -162,8 +162,12 @@ startup = 3000                  # everything loaded when a session starts
 claude-context-cost --budget context-budget.toml
 ```
 
+It measures the current folder; give another after the budget file
+(`--budget context-budget.toml path/to/repo`). The budget file's path is
+from where you run the command.
+
 ```text
-context budget: 5 instruction files, 2.25 bytes per token (default)
+context budget of my-repo: 5 instruction files, 2.25 bytes per token (default)
 
    tokens     limit  loaded     file
       622     1,500  start-up   rule: .claude/rules/style.md
@@ -172,6 +176,8 @@ context budget: 5 instruction files, 2.25 bytes per token (default)
     1,813     1,500  on demand  path rule: .claude/rules/api.md  OVER
       427     2,000  on demand  claude.md: web/CLAUDE.md
     3,393     3,000  start-up total  OVER
+
+not counted, as not in the repository: your ~/.claude/CLAUDE.md, memory and any CLAUDE.md above it
 
 over budget: 2 limits exceeded
   path rule: .claude/rules/api.md: 1,813 tokens > 1,500 (limit ".claude/rules/*.md")
@@ -182,8 +188,11 @@ over budget: 2 limits exceeded
   `.claude/rules/` without `paths:`, and what they import. **On demand**:
   rules with `paths:` and the `CLAUDE.md` of a subfolder, with their imports.
   Hidden folders and `node_modules` are skipped. Your own
-  `~/.claude/CLAUDE.md` and any `CLAUDE.md` above the repository are not in
-  it, so they are not counted.
+  `~/.claude/CLAUDE.md`, your memory (`MEMORY.md`) and any `CLAUDE.md` above
+  the repository are not in it, so they are not counted, though a session
+  loads them too.
+- **In a git hook**, `--quiet` prints only the verdict and the limits
+  exceeded: `within budget`, or the `over budget` lines.
 - **Tokens are bytes / a ratio**: 2.25 bytes per token by default, or
   `bytes_per_token = ...` in the budget. Running the tool on one of your
   transcripts prints the ratio measured in it.
@@ -201,7 +210,7 @@ In a GitHub Actions workflow:
 - uses: actions/setup-python@v7
   with:
     python-version: "3.x"
-- run: pip install claude-context-cost==1.5.1
+- run: pip install claude-context-cost==1.6.0
 - run: claude-context-cost --budget context-budget.toml
 ```
 

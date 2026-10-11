@@ -42,15 +42,16 @@ def print_report(rep, top, out):
               "in: responses it stayed in; chars/4: the usual estimate; error: chars/4 against entered "
               "(-38% = 38% too low)\n"
               "how: measured from the usage, split by bytes, or estimated (README, \"What it counts\")\n")
-    out.write(f"{'cost':>12} {'share':>6} {'entered':>9} {'in':>5}  {'chars/4':>9} {'error':>6}  "
-              f"{'how':<20} source\n")
     rows = sorted(rep.sources.values(), key=lambda s: -s.cost)
+    wide = max([20] + [len(how_text(s)) for s in rows[:top]])
+    out.write(f"{'cost':>12} {'share':>6} {'entered':>9} {'in':>5}  {'chars/4':>9} {'error':>6}  "
+              f"{'how':<{wide}} source\n")
     for s in rows[:top]:
         est = s.estimate_div4
         err = f"{(est - s.entered) / s.entered:+.0%}" if est is not None and s.entered > 0 else "-"
         est_txt = f"{est:,.0f}" if est is not None else "-"
         out.write(f"{s.cost:>12,} {s.cost / total:>6.1%} {s.entered:>9,} {s.responses:>5}  "
-                  f"{est_txt:>9} {err:>6}  {how_text(s):<20} {label((s.kind, s.name))}\n")
+                  f"{est_txt:>9} {err:>6}  {how_text(s):<{wide}} {label((s.kind, s.name))}\n")
     if len(rows) > top:
         rest = sum(s.cost for s in rows[top:])
         out.write(f"{rest:>12,} {rest / total:>6.1%}  ... {len(rows) - top} more sources (--all)\n")
@@ -204,9 +205,12 @@ def budget_json(b):
     }
 
 
-def print_budget(b, out):
+def print_budget(b, root, out, quiet=False):
+    if quiet:
+        # for a hook: only the verdict, and what exceeded
+        return print_verdict(b, out, "")
     ratio = "default" if b.ratio_is_default else f"declared in {Path(b.budget_file).name}"
-    out.write(f"context budget: {plural(len(b.files), 'instruction file')}, "
+    out.write(f"context budget of {Path(root).resolve().name}: {plural(len(b.files), 'instruction file')}, "
               f"{b.bytes_per_token:.2f} bytes per token ({ratio})\n")
     out.write(f"\n{'tokens':>9} {'limit':>9}  {'loaded':<9}  file\n")
     for f in b.files:
@@ -218,13 +222,19 @@ def print_budget(b, out):
     limit = f"{b.start_limit:,}" if b.start_limit is not None else "-"
     mark = "  OVER" if b.start_limit is not None and b.start_tokens > b.start_limit else ""
     out.write(f"{b.start_tokens:>9,} {limit:>9}  start-up total{mark}\n")
+    out.write("\nnot counted, as not in the repository: your ~/.claude/CLAUDE.md, memory and any CLAUDE.md "
+              "above it\n")
     if b.outside:
-        out.write(f"\nnot counted: {plural(len(b.outside), 'import')} outside the repository "
+        out.write(f"not counted: {plural(len(b.outside), 'import')} outside the repository "
                   f"({', '.join(sorted(set(b.outside)))})\n")
+    return print_verdict(b, out, "\n")
+
+
+def print_verdict(b, out, gap):
     if b.ok:
-        out.write("\nwithin budget\n")
+        out.write(f"{gap}within budget\n")
         return 0
-    out.write(f"\nover budget: {plural(len(b.over), 'limit')} exceeded\n")
+    out.write(f"{gap}over budget: {plural(len(b.over), 'limit')} exceeded\n")
     for o in b.over:
         what = label((o.kind, o.name)) if o.kind else o.name
         where = f" (limit \"{o.pattern}\")" if o.pattern else " (limit startup)"
@@ -232,7 +242,7 @@ def print_budget(b, out):
     return 1
 
 
-def run_budget(budget_file, root, out, as_json_output=False):
+def run_budget(budget_file, root, out, as_json_output=False, quiet=False):
     try:
         b = check_budget(root, budget_file)
     except (BudgetError, OSError) as e:
@@ -242,7 +252,7 @@ def run_budget(budget_file, root, out, as_json_output=False):
         json.dump(budget_json(b), out, indent=1)
         out.write("\n")
         return 0 if b.ok else 1
-    return print_budget(b, out)
+    return print_budget(b, root, out, quiet)
 
 
 def main(argv=None):
@@ -274,7 +284,10 @@ def main(argv=None):
     ap.add_argument("--budget", metavar="FILE",
                     help="check a repository against the limits in a TOML file: the CLAUDE.md, rules and "
                          "imports Claude Code loads from it, in estimated tokens; exit code 1 if a limit is "
-                         "exceeded, 2 if the budget file or the command line is invalid")
+                         "exceeded, 2 if the budget file or the command line is invalid; the FILE path is "
+                         "from where you run it")
+    ap.add_argument("--quiet", action="store_true",
+                    help="with --budget: print only the verdict and the limits exceeded (for a git hook)")
     ap.add_argument("--version", action="version", version=f"claude-context-cost {__version__}")
     a = ap.parse_args(argv)
     out = sys.stdout
@@ -287,7 +300,9 @@ def main(argv=None):
         root = Path(a.path or ".").expanduser()
         if not root.is_dir():
             ap.error(f"--budget needs a repository folder: {root}")
-        return run_budget(Path(a.budget).expanduser(), root, out, a.json)
+        return run_budget(Path(a.budget).expanduser(), root, out, a.json, a.quiet)
+    if a.quiet:
+        ap.error("--quiet is for --budget")
     if a.example:
         target = example_path()
     elif a.path:
