@@ -167,7 +167,10 @@ function usarExemplo(valores = {}) {
     el.value = novo;
   }
   if (mudou) desatualizar();
-  $("rodar").focus();
+  // Usar o exemplo também roda: só repor não mudava nada à vista (ContextoMedido, 10/10).
+  // Com o Pyodide carregando (ou um cálculo em curso) o botão está desabilitado: só o foco.
+  if ($("rodar").disabled) $("rodar").focus();
+  else $("formulario").requestSubmit();
 }
 
 function desatualizar() {
