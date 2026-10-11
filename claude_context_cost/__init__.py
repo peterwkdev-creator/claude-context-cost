@@ -7,7 +7,7 @@ from .summary import Summary, Total, summarize
 from .transcript import read
 from .versions import Version, loaded_versions
 
-__version__ = "1.6.0"
+__version__ = "1.6.1"
 __all__ = ["Budget", "BudgetError", "Report", "Source", "analyze", "attribute", "check_budget", "example_path",
            "loaded_versions", "read", "Summary", "summarize", "Total", "Version", "__version__"]
 

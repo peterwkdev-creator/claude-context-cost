@@ -1,6 +1,9 @@
 # claude-context-cost
 
 [![tests](https://github.com/peterwkdev-creator/claude-context-cost/actions/workflows/testes.yml/badge.svg)](https://github.com/peterwkdev-creator/claude-context-cost/actions/workflows/testes.yml)
+[![PyPI](https://img.shields.io/pypi/v/claude-context-cost?label=PyPI)](https://pypi.org/project/claude-context-cost/)
+[![Python](https://img.shields.io/pypi/pyversions/claude-context-cost?label=Python)](https://pypi.org/project/claude-context-cost/)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/peterwkdev-creator/claude-context-cost/blob/main/LICENSE)
 
 How much each source (your `CLAUDE.md`, rules, skills, memory, tool results)
 costs in the context of a Claude Code session, counted from the API `usage`
@@ -36,7 +39,7 @@ Python 3.11 or newer, no dependencies. To install a tagged version straight
 from GitHub instead:
 
 ```bash
-pip install "git+https://github.com/peterwkdev-creator/claude-context-cost@v1.6.0"
+pip install "git+https://github.com/peterwkdev-creator/claude-context-cost@v1.6.1"
 ```
 
 ## Usage
@@ -210,7 +213,7 @@ In a GitHub Actions workflow:
 - uses: actions/setup-python@v7
   with:
     python-version: "3.x"
-- run: pip install claude-context-cost==1.6.0
+- run: pip install claude-context-cost==1.6.1
 - run: claude-context-cost --budget context-budget.toml
 ```
 

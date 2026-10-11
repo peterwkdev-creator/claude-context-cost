@@ -3,6 +3,11 @@
 The version follows `claude_context_cost.__version__`; each one has a `vX.Y.Z` tag on
 the commit that released it.
 
+## 1.6.1 — 2026-10-11
+
+- README: badges for the PyPI version, the Python versions and the license,
+  beside the tests badge, so PyPI shows them too.
+
 ## 1.6.0 — 2026-10-11
 
 From a first use in another project's git hook:
