@@ -36,6 +36,23 @@ class TestCli(unittest.TestCase):
         read = next(line for line in out.splitlines() if line.endswith("tool: Read"))
         self.assertEqual(read.split()[:6], ["10,400", "6.5%", "3,200", "4", "2,000", "-38%"])
 
+    def test_every_column_is_explained(self):
+        # a first-time user reads the legend above the table, not the README
+        _, out = run_main("--example")
+        legend = out.split("        cost  share")[0]
+        for column in ("cost:", "share:", "entered:", "in:", "chars/4:", "error:", "how:"):
+            self.assertIn(column, legend)
+        _, out = run_main("--example", "--versions")
+        self.assertIn("same, +N or -N tokens", out)
+        self.assertIn("none of these files is on this machine", out)
+
+    def test_help_shows_examples_and_where_to_read_more(self):
+        buf = io.StringIO()
+        with redirect_stdout(buf), self.assertRaises(SystemExit):
+            main(["--help"])
+        self.assertIn("claude-context-cost --example", buf.getvalue())
+        self.assertIn("https://github.com/peterwkdev-creator/claude-context-cost", buf.getvalue())
+
     def test_steps(self):
         code, out = run_main("--example", "--steps")
         self.assertIn("#4 msg_04 context 25,000", out)

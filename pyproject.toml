@@ -37,10 +37,11 @@ classifiers = [
 claude-context-cost = "claude_context_cost.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/peterwkdev-creator/claude-context-cost"
-Demo = "https://peterwkdev-creator.github.io/claude-context-cost/"
-Changelog = "https://github.com/peterwkdev-creator/claude-context-cost/blob/main/CHANGELOG.md"
+# As the About on GitHub: Homepage is the page in the browser, Source the repository.
+Homepage = "https://peterwkdev-creator.github.io/claude-context-cost/"
+Source = "https://github.com/peterwkdev-creator/claude-context-cost"
 Issues = "https://github.com/peterwkdev-creator/claude-context-cost/issues"
+Changelog = "https://github.com/peterwkdev-creator/claude-context-cost/blob/main/CHANGELOG.md"
 
 [tool.setuptools]
 packages = ["claude_context_cost"]

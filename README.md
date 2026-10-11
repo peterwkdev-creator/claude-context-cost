@@ -36,7 +36,7 @@ Python 3.11 or newer, no dependencies. To install a tagged version straight
 from GitHub instead:
 
 ```bash
-pip install "git+https://github.com/peterwkdev-creator/claude-context-cost@v1.5.0"
+pip install "git+https://github.com/peterwkdev-creator/claude-context-cost@v1.5.1"
 ```
 
 ## Usage
@@ -61,20 +61,35 @@ rules stay apart, marked with the project.
 
 `--steps` shows what entered before each response, `--all` lists every
 source, `--json` is for scripts (for a folder too). On the synthetic example
-shipped with the package:
+shipped with the package (some rows left out):
 
 ```text
         cost  share   entered    in    chars/4  error  how                  source
      128,240  80.6%    36,640     7          -      -  -                    unattributed: system prompt, tools, overhead
       10,400   6.5%     3,200     4      2,000   -38%  measured, split      tool: Read
        5,600   3.5%     1,600     7      1,000   -38%  estimated            claude.md: CLAUDE.md
+       ...
        1,600   1.0%       800     4        500   -38%  split, estimated     path rule: .claude/rules/python.md
 ```
 
 - **cost**: tokens × the responses the source stayed in context, until a
   compaction removed it. This is what you pay for over the session.
-- **entered**: the tokens it brought in; **in**: the responses it stayed for.
-- **chars/4** and **error**: what the usual estimate would say, beside it.
+  **share**: its part of all the input tokens.
+- **entered**: the tokens it brought in; **in**: the responses it stayed in
+  (for a folder, the transcripts it was in).
+- **chars/4** and **error**: what the usual estimate would say, beside it;
+  `-38%` means it would count 38% too few.
+- **how**: `measured` (alone between two responses, so the usage gives its
+  exact tokens), `split` (shared with others, in proportion to bytes) or
+  `estimated` (at the start or after a compaction); rarely `unknown` (no
+  text to weigh, as an image) or `shrank` (the context got smaller); see
+  [What it counts](https://github.com/peterwkdev-creator/claude-context-cost#what-it-counts).
+- **source**, by kind: `claude.md`, `rule` (always loaded), `path rule` (a
+  rule with `paths:`, loaded on demand), `memory`, `skill`, `tool` (its
+  results), `prompt` (your messages), `output` (Claude's earlier answers,
+  which the next request sends back), `summary` (a compaction's summary),
+  `attachment` (the text Claude Code wraps around them) and `unattributed`
+  (system prompt, tool definitions, overhead).
 
 From Python:
 
@@ -113,7 +128,7 @@ CLAUDE.md, rules and memory as this session loaded them: their git version, and 
 
 version: the commit with exactly this text; (later): committed only after it was loaded
   not committed: no commit has this text; no git: the file is not in a git repository
-today: the file now, as Claude Code would load it
+today: the file on disk now, as Claude Code would load it: same, +N or -N tokens (grew or shrank since), changed, or not found
 ```
 
 - **version** is the newest commit made before the load whose file renders
@@ -122,7 +137,8 @@ today: the file now, as Claude Code would load it
 - **today** compares the file on disk now: `+289 tokens` means it grew by
   that much since the session loaded it.
 - Git is only read (`git log`, `git cat-file`), never written. `--json` adds
-  the list under `"versions"`; from Python, `loaded_versions(transcript)`.
+  the list under `"versions"` (the top-level `"version"` is the tool's own);
+  from Python, `loaded_versions(transcript)`.
 
 ## Context budget in CI
 
@@ -185,7 +201,7 @@ In a GitHub Actions workflow:
 - uses: actions/setup-python@v7
   with:
     python-version: "3.x"
-- run: pip install claude-context-cost==1.5.0
+- run: pip install claude-context-cost==1.5.1
 - run: claude-context-cost --budget context-budget.toml
 ```
 

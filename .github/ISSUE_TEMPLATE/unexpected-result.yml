@@ -27,6 +27,7 @@ body:
     id: got
     attributes:
       label: What the library returned
+      description: The output names files and project folders; replace private ones before pasting.
     validations:
       required: true
   - type: textarea

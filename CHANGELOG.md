@@ -3,6 +3,16 @@
 The version follows `claude_context_cost.__version__`; each one has a `vX.Y.Z` tag on
 the commit that released it.
 
+## 1.5.1 — 2026-10-11
+
+- Clearer output: the legend explains every column (`share`, `in`, `chars/4`,
+  `error`, `how`) and every `today` value of `--versions`; `--steps` says
+  "start of the session or after a compaction" instead of "segment start".
+- `--help` ends with examples, where the transcripts are and a link to the
+  README; error messages say what to give instead.
+- The README explains each kind of source and each `how`.
+- PyPI links as on GitHub: Homepage is the page, Source the repository.
+
 ## 1.5.0 — 2026-10-11
 
 - `--versions`: for one transcript, which git commit of each `CLAUDE.md`,

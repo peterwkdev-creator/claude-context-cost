@@ -36,8 +36,12 @@ def print_report(rep, top, out):
         out.write(f"bytes per token: {rep.bytes_per_token:.2f} (median of {rep.ratio_pairs} "
                   f"text-only steps in this transcript)\n")
     if rep.bad_lines:
-        out.write(f"skipped {rep.bad_lines} line(s) that are not JSON\n")
-    out.write("\ncost = tokens x responses it stayed in context; entered = tokens it brought in\n")
+        out.write(f"skipped: {plural(rep.bad_lines, 'line')} not in JSON\n")
+    out.write("\ncost: tokens x responses it stayed in context; share: of all input tokens; "
+              "entered: tokens it brought in\n"
+              "in: responses it stayed in; chars/4: the usual estimate; error: chars/4 against entered "
+              "(-38% = 38% too low)\n"
+              "how: measured from the usage, split by bytes, or estimated (README, \"What it counts\")\n")
     out.write(f"{'cost':>12} {'share':>6} {'entered':>9} {'in':>5}  {'chars/4':>9} {'error':>6}  "
               f"{'how':<20} source\n")
     rows = sorted(rep.sources.values(), key=lambda s: -s.cost)
@@ -55,7 +59,8 @@ def print_report(rep, top, out):
 def print_steps(rep, out):
     prev = None
     for n, r in enumerate(rep.responses, 1):
-        start = " (segment start: the remainder is the system prompt and tools)" if r.segment_start else ""
+        start = (" (start of the session or after a compaction: the rest is the system prompt and the tool "
+                 "definitions)" if r.segment_start else "")
         out.write(f"#{n} {r.id} context {r.context:,}{start}\n")
         if prev is not None and not r.segment_start:
             out.write(f"    {prev.output:>+9,}  output: responses (previous output)\n")
@@ -91,7 +96,10 @@ def print_versions(vs, out):
                   f"{label((v.kind, v.name))}\n")
     out.write("\nversion: the commit with exactly this text; (later): committed only after it was loaded\n"
               "  not committed: no commit has this text; no git: the file is not in a git repository\n"
-              "today: the file now, as Claude Code would load it\n")
+              "today: the file on disk now, as Claude Code would load it: same, +N or -N tokens (grew or "
+              "shrank since), changed, or not found\n")
+    if all(v.today == "not found" for v in vs):
+        out.write("\nnone of these files is on this machine (as with --example)\n")
 
 
 def as_json(rep):
@@ -150,8 +158,10 @@ def print_folder(folder, top, out, as_json_output=False):
     out.write(f"{Path(s.path).name}: {head}{plural(len(sessions), 'transcript')} and "
               f"{plural(len(s.rows) - len(sessions), 'subagent transcript')}, "
               f"{plural(s.responses, 'response')}, {s.total:,} input tokens over all responses\n")
-    out.write("\ncost = tokens x responses it stayed in context, summed; entered = tokens it brought in; "
-              "in = transcripts it was in\n")
+    out.write("\ncost: tokens x responses it stayed in context, summed; share: of all input tokens; "
+              "entered: tokens it brought in\n"
+              "in: transcripts it was in (not responses, as for one file); chars/4: the usual estimate; "
+              "error: chars/4 against entered\n")
     out.write(f"{'cost':>14} {'share':>6} {'entered':>11} {'in':>5}  {'chars/4':>11} {'error':>6}  source\n")
     rows = sorted(s.sources.values(), key=lambda t: -t.cost)
     for t in rows[:top]:
@@ -226,7 +236,7 @@ def run_budget(budget_file, root, out, as_json_output=False):
     try:
         b = check_budget(root, budget_file)
     except (BudgetError, OSError) as e:
-        sys.stderr.write(f"claude-context-cost: {e}\n")
+        sys.stderr.write(f"claude-context-cost: error: {e}\n")
         return 2
     if as_json_output:
         json.dump(budget_json(b), out, indent=1)
@@ -240,7 +250,17 @@ def main(argv=None):
         sys.stdout.reconfigure(errors="replace")
     ap = argparse.ArgumentParser(prog="claude-context-cost",
                                  description="How much each source costs in the context of a Claude Code "
-                                             "session, counted from the API usage in its transcript.")
+                                             "session, counted from the API usage in its transcript.",
+                                 formatter_class=argparse.RawDescriptionHelpFormatter,
+                                 epilog="examples:\n"
+                                        "  claude-context-cost --example\n"
+                                        "  claude-context-cost ~/.claude/projects/<project>/<session>.jsonl\n"
+                                        "  claude-context-cost ~/.claude/projects/<project>\n"
+                                        "  claude-context-cost --budget context-budget.toml\n\n"
+                                        "Transcripts are in ~/.claude/projects (%USERPROFILE%\\.claude\\projects "
+                                        "on Windows).\n"
+                                        "What each column means, and the budget file: "
+                                        "https://github.com/peterwkdev-creator/claude-context-cost")
     ap.add_argument("path", nargs="?", help="a transcript (.jsonl), or a folder to sum: a project's "
                                             "(~/.claude/projects/<project>) or ~/.claude/projects for all; "
                                             "with --budget, the repository folder (default: the current one)")
@@ -262,8 +282,8 @@ def main(argv=None):
         if not a.budget:
             ap.error("--budget needs a file name")
         if a.example or a.steps or a.all or a.versions:
-            ap.error("--budget takes a repository folder; --example, --steps, --all and --versions are for "
-                     "transcripts")
+            ap.error("--budget cannot be combined with --example, --steps, --all or --versions "
+                     "(those read a transcript; --budget reads a repository)")
         root = Path(a.path or ".").expanduser()
         if not root.is_dir():
             ap.error(f"--budget needs a repository folder: {root}")
@@ -273,13 +293,13 @@ def main(argv=None):
     elif a.path:
         target = Path(a.path).expanduser()
     else:
-        ap.error("give a transcript or a folder, or --example")
+        ap.error("give a transcript (.jsonl) or a folder from ~/.claude/projects, or try --example")
     if target.is_dir():
         if a.steps or a.versions:
             ap.error("--steps and --versions need one transcript, not a folder")
         return print_folder(target, 10 ** 9 if a.all else TOP, out, a.json)
     if not target.is_file():
-        ap.error(f"not found: {target}")
+        ap.error(f"no such file or folder: {target} (transcripts are in ~/.claude/projects/<project>/)")
     rep = analyze(target)
     vs = loaded_versions(target, rep.bytes_per_token) if a.versions else None
     if a.json:
