@@ -2,12 +2,13 @@
 from pathlib import Path
 
 from .attribute import Report, Source, analyze, attribute
+from .budget import Budget, BudgetError, check_budget
 from .summary import Summary, Total, summarize
 from .transcript import read
 
-__version__ = "1.3.1"
-__all__ = ["Report", "Source", "analyze", "attribute", "example_path", "read", "Summary", "summarize",
-           "Total", "__version__"]
+__version__ = "1.4.0"
+__all__ = ["Budget", "BudgetError", "Report", "Source", "analyze", "attribute", "check_budget", "example_path",
+           "read", "Summary", "summarize", "Total", "__version__"]
 
 
 def example_path():

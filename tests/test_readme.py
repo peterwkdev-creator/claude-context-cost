@@ -26,6 +26,10 @@ class TestReadmeExamples(unittest.TestCase):
         tags = re.findall(r"claude-context-cost@v(\d+(?:\.\d+)*)", README.read_text(encoding="utf-8"))
         self.assertTrue(tags, "the README does not install from the tag")
         self.assertEqual(set(tags), {__version__})
+        # the CI example pins the version from PyPI
+        pins = re.findall(r"claude-context-cost==(\d+(?:\.\d+)*)", README.read_text(encoding="utf-8"))
+        self.assertTrue(pins, "the README CI example does not pin the version")
+        self.assertEqual(set(pins), {__version__})
 
 
 if __name__ == "__main__":

@@ -12,9 +12,12 @@ Subagent transcripts (`<session>/subagents/*.jsonl`) are checked too.
 import json
 import os
 import unittest
+from datetime import datetime
 from pathlib import Path
 
 from claude_context_cost import analyze, summarize
+from claude_context_cost.budget import scan
+from claude_context_cost.transcript import _norm, short_path
 
 SETTING = os.environ.get("CLAUDE_CONTEXT_COST_CORPUS", "")
 BASE = Path.home() / ".claude" / "projects" if SETTING in ("", "1") else Path(SETTING)
@@ -39,6 +42,24 @@ def independent_count(path):
                     + (u.get("cache_creation_input_tokens") or 0):
                 ids[side].add(m.get("id"))
     return len(ids[False] if main else ids[True])   # a subagent's own file has only sidechain lines
+
+
+def session_start(path):
+    """When the session began: its first timestamp, read from the session's own transcript for a subagent."""
+    if path.parent.name == "subagents":
+        path = path.parents[2] / (path.parents[1].name + ".jsonl")
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                try:
+                    ts = json.loads(line).get("timestamp")
+                except (ValueError, AttributeError):
+                    continue
+                if ts:
+                    return datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
+    except OSError:
+        pass
+    return float("-inf")   # unknown: nothing on disk counts as unchanged
 
 
 @unittest.skipUnless(SETTING, "set CLAUDE_CONTEXT_COST_CORPUS to read the transcripts on this machine")
@@ -76,6 +97,68 @@ class TestCorpus(unittest.TestCase):
         self.assertEqual(before - summed, set())
         self.assertEqual(sum(t.cost for t in s.sources.values()), s.total)
         self.assertEqual(s.total, sum(r.total for r in s.rows))
+
+    def test_the_budget_scan_finds_what_claude_code_loaded(self):
+        # a file changed after the load can explain a difference, so a load is compared
+        # only when no file involved changed since; the project folder must still exist
+        start = start_same = on_demand = on_demand_same = bytes_ok = bytes_seen = 0
+        scans = {}
+        for f in sorted(BASE.glob("**/*.jsonl")):
+            first = True
+            with open(f, encoding="utf-8", errors="replace") as fh:
+                for line in fh:
+                    if '"instructions"' not in line and '"nested_memory"' not in line:
+                        continue
+                    try:
+                        e = json.loads(line)
+                        when = datetime.fromisoformat(e["timestamp"].replace("Z", "+00:00")).timestamp()
+                    except (ValueError, KeyError, TypeError, AttributeError):
+                        continue
+                    a, cwd = e.get("attachment") or {}, e.get("cwd") or ""
+                    if not isinstance(a, dict) or not cwd or not os.path.isdir(cwd):
+                        continue
+                    if cwd not in scans:
+                        scans[cwd] = {x.name: x for x in scan(cwd)[0]}
+                    mine, root = scans[cwd], Path(cwd)
+
+                    def changed(name):
+                        p = root / name
+                        return not p.is_file() or p.stat().st_mtime > when
+                    # a subagent gets the instructions its session loaded earlier: they were read
+                    # no later than the session's first line
+                    if a.get("type") == "instructions" and first:
+                        when = min(when, session_start(f))
+                        first = False
+                        got = {}
+                        for x in a.get("files") or []:
+                            name = short_path(x.get("path"), cwd)
+                            if x.get("type") == "Project" and name != _norm(x.get("path")):
+                                got[name] = x.get("content") or ""
+                        want = {n for n, x in mine.items() if x.start}
+                        if any(changed(n) for n in set(got) ^ want):
+                            continue
+                        start += 1
+                        start_same += set(got) == want
+                        for n in set(got) & want:
+                            if not changed(n):
+                                bytes_seen += 1
+                                bytes_ok += mine[n].bytes == len(got[n].encode("utf-8"))
+                    elif a.get("type") == "nested_memory":
+                        c = a.get("content") if isinstance(a.get("content"), dict) else {}
+                        name = short_path(a.get("path") or c.get("path"), cwd)
+                        if name == _norm(a.get("path") or c.get("path")) or changed(name):
+                            continue
+                        on_demand += 1
+                        x = mine.get(name)
+                        on_demand_same += x is not None and not x.start
+                        if x is not None and isinstance(c.get("content"), str):
+                            bytes_seen += 1
+                            bytes_ok += x.bytes == len(c["content"].encode("utf-8"))
+        print(f"\nbudget scan: start-up set equal in {start_same} of {start} loads, on-demand file found "
+              f"in {on_demand_same} of {on_demand}, bytes equal in {bytes_ok} of {bytes_seen} files")
+        self.assertEqual(start_same, start)
+        self.assertEqual(on_demand_same, on_demand)
+        self.assertEqual(bytes_ok, bytes_seen)
 
 
 if __name__ == "__main__":

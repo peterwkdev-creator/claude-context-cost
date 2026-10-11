@@ -13,7 +13,7 @@ license-files = ["LICENSE"]
 authors = [{ name = "Peter" }]
 requires-python = ">=3.11"
 dependencies = []
-keywords = ["claude-code", "context-window", "tokens", "transcript", "cli"]
+keywords = ["claude-code", "context-window", "tokens", "transcript", "cli", "ci", "claude-md"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Environment :: Console",

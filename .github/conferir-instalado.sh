@@ -25,3 +25,14 @@ read = report.sources[("tool", "Read")]
 assert (report.total, read.entered, read.responses, read.cost) == (159160, 3200, 4, 10400), report.total
 print("installed package: README example OK")
 '
+# The budget, through what pip installed: a repository of one CLAUDE.md of
+# 900 bytes (400 tokens), within its limit (exit 0) and over it (exit 1).
+mkdir -p orcamento
+"$venv/bin/python" -I -c 'print("x" * 900, end="")' > orcamento/CLAUDE.md
+echo 'startup = 400' > orcamento/budget.toml
+"$venv/bin/claude-context-cost" --budget orcamento/budget.toml orcamento | grep -F "within budget"
+echo 'startup = 399' > orcamento/budget.toml
+code=0
+"$venv/bin/claude-context-cost" --budget orcamento/budget.toml orcamento > /dev/null || code=$?
+test "$code" -eq 1
+echo "installed package: budget OK"

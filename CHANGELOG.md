@@ -3,6 +3,20 @@
 The version follows `claude_context_cost.__version__`; each one has a `vX.Y.Z` tag on
 the commit that released it.
 
+## 1.4.0 — 2026-10-11
+
+- Context budget for CI: `claude-context-cost --budget context-budget.toml
+  [repository]` measures every `CLAUDE.md`, rule and `@import` Claude Code
+  loads from a repository, as Claude Code renders them, and exits with 1 when
+  a declared limit is passed (per file by glob pattern, and for the start-up
+  total), with 2 when the budget file is invalid. `--json` works with it.
+- `check_budget`, `Budget` and `BudgetError` in the API.
+- On the author's machine the files found are the ones Claude Code loaded in
+  257 of 257 start-ups and 252 of 252 on-demand loads, with the same bytes in
+  268 of 268 files (`tests/test_corpus.py`).
+- Mutation: 36 mutants, 19 of them in the budget; the tests catch all 36.
+- CI checks the budget through the installed package too.
+
 ## 1.3.1 — 2026-10-11
 
 - Published on PyPI: `pip install claude-context-cost`. Each Release publishes

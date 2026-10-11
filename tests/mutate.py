@@ -1,9 +1,9 @@
-"""Mutation proof: break each counting rule on purpose; the acceptance tests must fail.
+"""Mutation proof: break each counting or budget rule on purpose; the tests must fail.
 
     python tests/mutate.py
 
 Each mutant changes one unique snippet in a copy of the package and runs
-`tests.test_acceptance` there. A mutant counts as caught only when the run ends
+`tests.test_acceptance` and `tests.test_budget` there. A mutant counts as caught only when the run ends
 in assertion failures (`failures=`), never in errors: an import or syntax
 error proves nothing. The clean copy runs first and the whole round stops if it
 is not green. Exit code 0 only if every mutant is caught.
@@ -16,7 +16,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SUITE = "tests.test_acceptance"
+SUITE = ("tests.test_acceptance", "tests.test_budget")
 
 # (rule it breaks, file, snippet, replacement)
 MUTANTS = [
@@ -60,11 +60,49 @@ MUTANTS = [
      "sorted(folder.glob(\"*/subagents/*.jsonl\"), key=by_time)", "[]"),
     ("a source's cost is summed over transcripts", "summary.py",
      "t.cost += src.cost", "t.cost = src.cost"),
+    ("budget: the frontmatter is not sent", "budget.py",
+     "t = FRONTMATTER.sub(\"\", t, 1)", "t = t"),
+    ("budget: comment blocks are not sent", "budget.py",
+     "t = COMMENT_BLOCK.sub(\"\", t)", "t = t"),
+    ("budget: on demand only the start is stripped", "budget.py",
+     "t = t.strip() if start else t.lstrip()", "t = t.strip()"),
+    ("budget: the file's line ends are kept", "budget.py",
+     "if \"\\r\\n\" in text and not comments else t", "if False else t"),
+    ("budget: a rule with paths: loads on demand", "budget.py",
+     "(p, not _has_paths(_read(p)))", "(p, True)"),
+    ("budget: a subfolder's CLAUDE.md is counted", "budget.py",
+     "found += [(p, False) for p in _subfolders_claude_md(root)]", "found += []"),
+    ("budget: hidden folders and node_modules are skipped", "budget.py",
+     "if not p.name.startswith(\".\") and p.name != \"node_modules\":", "if True:"),
+    ("budget: imports are followed", "budget.py",
+     "                    follow(path, text, start, 1)", "                    pass"),
+    ("budget: an import is relative to the importing file", "budget.py",
+     "p = (path.parent / target).resolve()", "p = (root / target).resolve()"),
+    ("budget: imports stop after five hops", "budget.py",
+     "if depth > MAX_IMPORT_DEPTH:", "if depth > MAX_IMPORT_DEPTH + 1:"),
+    ("budget: an import in code is not followed", "budget.py",
+     "text = CODE_SPAN.sub(\"\", CODE_BLOCK.sub(\"\", text))", "text = text"),
+    ("budget: the declared ratio is used", "budget.py",
+     "files, outside = scan(root, ratio or DEFAULT_BYTES_PER_TOKEN)", "files, outside = scan(root)"),
+    ("budget: a file over its limit fails", "budget.py",
+     "if f.tokens > limit:", "if f.tokens > limit + 1:"),
+    ("budget: a file is held to every pattern", "budget.py",
+     "f.limit = limit if f.limit is None else min(f.limit, limit)", "f.limit = limit"),
+    ("budget: the start-up total has a limit", "budget.py",
+     "if start is not None and b.start_tokens > start:", "if False:"),
+    ("budget: a pattern that matches no file is an error", "budget.py",
+     "if not hits:", "if False:"),
+    ("budget: a star stays in one folder", "budget.py",
+     "out.append(\"[^/]*\")", "out.append(\".*\")"),
+    ("budget: an unknown key is an error", "budget.py",
+     "if unknown:", "if False:"),
+    ("budget: a limit is a positive integer", "budget.py",
+     "if not ok or value <= 0:", "if value <= 0:"),
 ]
 
 
 def run(where):
-    p = subprocess.run([sys.executable, "-m", "unittest", SUITE], cwd=where, capture_output=True, timeout=120)
+    p = subprocess.run([sys.executable, "-m", "unittest", *SUITE], cwd=where, capture_output=True, timeout=120)
     out = (p.stdout + p.stderr).decode("utf-8", errors="replace")
     ran = re.search(r"Ran (\d+) test", out)
     status = out.strip().splitlines()[-1] if out.strip() else ""
@@ -98,7 +136,7 @@ def main():
                 print(f"INVALID  {rule}: run ended in {status!r}, not in assertion failures")
             else:
                 print(f"ALIVE    {rule}: {ran_m} tests passed")
-        print(f"{caught} of {len(MUTANTS)} mutants caught by {SUITE}")
+        print(f"{caught} of {len(MUTANTS)} mutants caught by {' and '.join(SUITE)}")
         return 0 if caught == len(MUTANTS) else 1
 
 

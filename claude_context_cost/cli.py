@@ -1,4 +1,4 @@
-"""Command line: claude-context-cost <transcript.jsonl | folder>."""
+"""Command line: claude-context-cost <transcript.jsonl | folder>, or --budget FILE [repository]."""
 import argparse
 import json
 import sys
@@ -6,6 +6,7 @@ from pathlib import Path
 
 from . import __version__, example_path
 from .attribute import FLOOR, analyze
+from .budget import BudgetError, check_budget
 from .summary import summarize
 
 TOP = 20
@@ -152,6 +153,60 @@ def print_folder(folder, top, out, as_json_output=False):
     return 0
 
 
+def budget_json(b):
+    return {
+        "budget": Path(b.budget_file).name, "version": __version__, "ok": b.ok,
+        "bytes_per_token": b.bytes_per_token, "ratio_is_default": b.ratio_is_default,
+        "startup": {"tokens": b.start_tokens, "limit": b.start_limit},
+        "files": [{"kind": f.kind, "name": f.name, "bytes": f.bytes, "tokens": f.tokens, "startup": f.start,
+                   "imported_by": f.imported_by or None, "limit": f.limit} for f in b.files],
+        "over": [{"kind": o.kind or None, "name": o.name, "tokens": o.tokens, "limit": o.limit,
+                  "pattern": o.pattern or None} for o in b.over],
+        "outside": b.outside,
+    }
+
+
+def print_budget(b, out):
+    ratio = "default" if b.ratio_is_default else f"declared in {Path(b.budget_file).name}"
+    out.write(f"context budget: {plural(len(b.files), 'instruction file')}, "
+              f"{b.bytes_per_token:.2f} bytes per token ({ratio})\n")
+    out.write(f"\n{'tokens':>9} {'limit':>9}  {'loaded':<9} file\n")
+    for f in b.files:
+        limit = f"{f.limit:,}" if f.limit is not None else "-"
+        mark = "  OVER" if f.limit is not None and f.tokens > f.limit else ""
+        via = f" (imported by {f.imported_by})" if f.imported_by else ""
+        out.write(f"{f.tokens:>9,} {limit:>9}  {'start-up' if f.start else 'on demand':<9} "
+                  f"{label((f.kind, f.name))}{via}{mark}\n")
+    limit = f"{b.start_limit:,}" if b.start_limit is not None else "-"
+    mark = "  OVER" if b.start_limit is not None and b.start_tokens > b.start_limit else ""
+    out.write(f"{b.start_tokens:>9,} {limit:>9}  start-up total{mark}\n")
+    if b.outside:
+        out.write(f"\nnot counted: {plural(len(b.outside), 'import')} outside the repository "
+                  f"({', '.join(sorted(set(b.outside)))})\n")
+    if b.ok:
+        out.write("\nwithin budget\n")
+        return 0
+    out.write(f"\nover budget: {plural(len(b.over), 'limit')} passed\n")
+    for o in b.over:
+        what = label((o.kind, o.name)) if o.kind else o.name
+        where = f" (limit \"{o.pattern}\")" if o.pattern else " (limit startup)"
+        out.write(f"  {what}: {o.tokens:,} tokens > {o.limit:,}{where}\n")
+    return 1
+
+
+def run_budget(budget_file, root, out, as_json_output=False):
+    try:
+        b = check_budget(root, budget_file)
+    except (BudgetError, OSError) as e:
+        sys.stderr.write(f"claude-context-cost: {e}\n")
+        return 2
+    if as_json_output:
+        json.dump(budget_json(b), out, indent=1)
+        out.write("\n")
+        return 0 if b.ok else 1
+    return print_budget(b, out)
+
+
 def main(argv=None):
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(errors="replace")
@@ -164,9 +219,20 @@ def main(argv=None):
     ap.add_argument("--steps", action="store_true", help="also show what entered before each response")
     ap.add_argument("--all", action="store_true", help="list every source, not only the top 20")
     ap.add_argument("--json", action="store_true", help="machine-readable output")
+    ap.add_argument("--budget", metavar="FILE",
+                    help="check a repository (the path, or the current folder) against the limits in a TOML "
+                         "file: the CLAUDE.md, rules and imports Claude Code loads from it, in estimated "
+                         "tokens; exit code 1 if a limit is passed, 2 if the budget file is invalid")
     ap.add_argument("--version", action="version", version=f"claude-context-cost {__version__}")
     a = ap.parse_args(argv)
     out = sys.stdout
+    if a.budget:
+        if a.example or a.steps or a.all:
+            ap.error("--budget takes a repository folder; --example, --steps and --all are for transcripts")
+        root = Path(a.path or ".").expanduser()
+        if not root.is_dir():
+            ap.error(f"--budget needs a repository folder: {root}")
+        return run_budget(Path(a.budget).expanduser(), root, out, a.json)
     if a.example:
         target = example_path()
     elif a.path:

@@ -10,6 +10,9 @@ recorded in its transcript, not estimated from characters.
 choose one of your transcripts, or run the synthetic example. The library runs
 in the page (Pyodide); your file is never uploaded.
 
+In CI, [`--budget`](#context-budget-in-ci) fails a pull request that makes a
+`CLAUDE.md`, a rule or an import pass the limit you declared.
+
 The usual estimate, characters / 4, **undercounts by 40 to 45%**: −45% over
 5,365 steps of the author's sessions, mostly in Portuguese, and −40% in an
 English-language session (2026-10-10). Here every response adds up to its
@@ -28,7 +31,7 @@ Python 3.11 or newer, no dependencies. To install a tagged version straight
 from GitHub instead:
 
 ```bash
-pip install "git+https://github.com/peterwkdev-creator/claude-context-cost@v1.3.1"
+pip install "git+https://github.com/peterwkdev-creator/claude-context-cost@v1.4.0"
 ```
 
 ## Usage
@@ -84,6 +87,72 @@ print(read.estimate_div4)  # 2000.0: characters / 4 for the same text
 `.sources` maps `(kind, name, project)` to the totals, with `project` set only
 for a project's own files.
 
+## Context budget in CI
+
+There is no transcript in CI, so `--budget` measures the repository itself:
+every `CLAUDE.md`, rule and `@import` Claude Code would load from it, as
+Claude Code renders them (frontmatter and HTML comment blocks out), held to the
+limits you declare. It exits with 1 when a limit is passed, so a pull request
+that bloats the context fails.
+
+```toml
+# context-budget.toml, at the root of the repository
+startup = 3000                  # everything loaded when a session starts
+
+[limits]                        # per file; a file is held to every pattern that matches it
+"CLAUDE.md" = 2000
+".claude/rules/*.md" = 1500     # * stays in one folder, **/ is any number of folders
+"**/CLAUDE.md" = 2000
+```
+
+```bash
+claude-context-cost --budget context-budget.toml
+```
+
+```text
+context budget: 5 instruction files, 2.25 bytes per token (default)
+
+   tokens     limit  loaded    file
+      622     1,500  start-up  rule: .claude/rules/style.md
+    1,705     2,000  start-up  claude.md: CLAUDE.md
+    1,066         -  start-up  claude.md: docs/architecture.md (imported by CLAUDE.md)
+    1,813     1,500  on demand path rule: .claude/rules/api.md  OVER
+      427     2,000  on demand claude.md: web/CLAUDE.md
+    3,393     3,000  start-up total  OVER
+
+over budget: 2 limits passed
+  path rule: .claude/rules/api.md: 1,813 tokens > 1,500 (limit ".claude/rules/*.md")
+  start-up total: 3,393 tokens > 3,000 (limit startup)
+```
+
+- **Start-up**: `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, rules in
+  `.claude/rules/` without `paths:`, and what they import. **On demand**:
+  rules with `paths:` and the `CLAUDE.md` of a subfolder, with their imports.
+  Hidden folders and `node_modules` are skipped. Your own
+  `~/.claude/CLAUDE.md` and any `CLAUDE.md` above the repository are not in
+  it, so they are not counted.
+- **Tokens are bytes / a ratio**: 2.25 bytes per token by default, or
+  `bytes_per_token = ...` in the budget. Running the tool on one of your
+  transcripts prints the ratio measured in it.
+- **An invalid budget exits with 2**, never passes: a typo in a key, a limit
+  that is not a positive integer, or a pattern that matches no file (it would
+  leave a file without its limit). An import that resolves outside the
+  repository is listed, not counted.
+
+In a GitHub Actions workflow:
+
+```yaml
+- uses: actions/setup-python@v7
+  with:
+    python-version: "3.x"
+- run: pip install claude-context-cost==1.4.0
+- run: claude-context-cost --budget context-budget.toml
+```
+
+`--json` gives the same result for scripts; from Python,
+`check_budget(repository, budget_file)` returns it, and raises `BudgetError`
+for an invalid budget.
+
 ## Why
 
 [claude-devtools](https://github.com/matt1398/claude-devtools) already shows
@@ -128,12 +197,18 @@ This tool fixes the first two from the transcript alone.
   where every source's tokens are worked out by hand: each one comes out
   exact, every response adds up to its `usage`, a `paths:` rule that never
   loaded counts 0, a response written over several lines counts once.
+- The budget is tested on synthetic repositories (`tests/test_budget.py`):
+  what loads at start-up and on demand, imports, rendering, limits, invalid
+  budgets.
 - `python tests/mutate.py` breaks each of those rules in a copy of the code
-  (17 mutants); the tests catch all 17.
+  (36 mutants, 19 of them in the budget); the tests catch all 36.
 - On the author's machine (2026-10-10): 75 session transcripts and 382
   subagent transcripts, 91,347 responses, 0 where the sources differ from the
   `usage`, 0 where the response count differs from an independent count, and
-  the sum over every project takes every transcript. The
+  the sum over every project takes every transcript. For the budget
+  (2026-10-11): the files found are the ones Claude Code loaded in 257 of
+  257 start-ups and 252 of 252 on-demand loads, with the same bytes in 268
+  of 268 files (loads whose files changed afterwards are left out). The
   ratio was measured in 50 of the 73 sessions with responses, median 2.22
   bytes per token. Run it on yours with
   `CLAUDE_CONTEXT_COST_CORPUS=1 python -m unittest tests.test_corpus -v`
@@ -153,6 +228,10 @@ This tool fixes the first two from the transcript alone.
   license, release notes, two READMEs, three Python modules and a git log;
   median −40%, from −29% to −47%. The other numbers come from one person's
   sessions, mostly in Portuguese.
+- **The budget counts bytes, not the tokenizer**: its tokens are as good as
+  the ratio. And it counts every `@import` that resolves to a file: on the
+  author's machine Claude Code loaded 32 of 35 such imports, with no rule
+  found for the other 3, so the budget may count more than loads, never less.
 - The transcript format is not documented and changes between versions.
 
 ## Compatibility
