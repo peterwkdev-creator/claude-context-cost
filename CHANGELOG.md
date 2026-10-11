@@ -21,9 +21,9 @@ the commit that released it.
   followed; a Windows junction is not followed; `--budget ""` is an error.
 - Clearer output: "2 limits exceeded" instead of "passed", and a space after
   the `loaded` column.
-- The README's links and image are absolute, so they work on PyPI too; the
-  PyPI page links the demo and this changelog, and its keywords are the
-  GitHub topics.
+- The README's links, section links and image are absolute, so they work on
+  PyPI too, and it shows the CI badge; the PyPI page links the demo and this
+  changelog, and its description and keywords are the GitHub About and topics.
 - `SECURITY.md`: how to report a vulnerability privately, and what the tool
   does not do (no network, no writes). The CI's actions are pinned by commit.
 - Mutation: 51 mutants (24 in the budget, 10 in `--versions`); the tests

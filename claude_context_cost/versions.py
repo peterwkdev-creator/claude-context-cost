@@ -110,17 +110,17 @@ def _top(path):
         if d.parent == d:
             return None
         d = d.parent
-    out = _git(str(d), "rev-parse", "--show-toplevel")
+    # git names the folder's place in the repository itself: comparing the path with the top folder
+    # would fail where one path has two spellings (a Windows short name, RUNNER~1)
+    out = _git(str(d), "rev-parse", "--show-toplevel", "--show-prefix")
     if not out:
         return None
-    top = out.decode("utf-8", "replace").strip()
-    try:   # relpath ignores case where the file system does, and keeps the path's own case for git
-        rel = os.path.relpath(os.path.abspath(path), os.path.abspath(top))
-    except ValueError:   # another drive
+    lines = out.decode("utf-8", "replace").splitlines()
+    if len(lines) < 1 or not lines[0]:
         return None
-    if rel == os.curdir or rel.startswith(os.pardir):
-        return None
-    return top, rel.replace(os.sep, "/")
+    top, prefix = lines[0], lines[1] if len(lines) > 1 else ""
+    rest = os.path.relpath(path, d).replace(os.sep, "/")   # d is path's own parent: same spelling
+    return top, prefix + rest
 
 
 def _history(top, rel):

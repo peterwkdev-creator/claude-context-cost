@@ -1,5 +1,7 @@
 # claude-context-cost
 
+[![tests](https://github.com/peterwkdev-creator/claude-context-cost/actions/workflows/testes.yml/badge.svg)](https://github.com/peterwkdev-creator/claude-context-cost/actions/workflows/testes.yml)
+
 How much each source (your `CLAUDE.md`, rules, skills, memory, tool results)
 costs in the context of a Claude Code session, counted from the API `usage`
 recorded in its transcript, not estimated from characters.
@@ -10,9 +12,9 @@ recorded in its transcript, not estimated from characters.
 choose one of your transcripts, or run the synthetic example. The library runs
 in the page (Pyodide); your file is never uploaded.
 
-In CI, [`--budget`](#context-budget-in-ci) fails a pull request that makes a
+In CI, [`--budget`](https://github.com/peterwkdev-creator/claude-context-cost#context-budget-in-ci) fails a pull request that makes a
 `CLAUDE.md`, a rule or an import grow over the limit you declared.
-[`--versions`](#which-version-a-session-loaded) shows which git commit of each
+[`--versions`](https://github.com/peterwkdev-creator/claude-context-cost#which-version-a-session-loaded) shows which git commit of each
 `CLAUDE.md`, rule and memory file a session loaded, and whether the file
 changed since.
 

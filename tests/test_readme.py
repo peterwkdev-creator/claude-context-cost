@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 README = Path(__file__).resolve().parents[1] / "README.md"
+REPO = "https://github.com/peterwkdev-creator/claude-context-cost"
 
 
 class TestReadmeExamples(unittest.TestCase):
@@ -32,8 +33,8 @@ class TestReadmeExamples(unittest.TestCase):
         self.assertEqual(set(pins), {__version__})
 
     def test_links_work_on_pypi_too(self):
-        # PyPI shows the README without the repository, so a relative link or image breaks there;
-        # an anchor must name a heading of the README
+        # PyPI shows the README without the repository: a relative link or image breaks there, and
+        # so does an anchor (PyPI renames heading ids), so a section is linked on GitHub, by name
         text = README.read_text(encoding="utf-8")
         anchors = {re.sub(r"[^\w\- ]", "", h).strip().lower().replace(" ", "-")
                    for h in re.findall(r"^#+ (.+)$", text, re.M)}
@@ -41,10 +42,9 @@ class TestReadmeExamples(unittest.TestCase):
         self.assertGreater(len(links), 5)
         for link in links:
             with self.subTest(link=link):
-                if link.startswith("#"):
-                    self.assertIn(link[1:], anchors)
-                else:
-                    self.assertTrue(link.startswith("https://"), "use an absolute https link")
+                self.assertTrue(link.startswith("https://"), "use an absolute https link")
+                if link.startswith(REPO + "#"):
+                    self.assertIn(link.split("#", 1)[1], anchors)
 
 
 if __name__ == "__main__":

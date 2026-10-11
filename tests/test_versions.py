@@ -91,6 +91,20 @@ class TestLoadedVersions(unittest.TestCase):
         self.assertEqual(len(first.commit), 40)
         self.assertNotEqual(first.commit, second.commit)
 
+    @unittest.skipUnless(os.name == "nt", "Windows short names")
+    def test_a_path_with_a_windows_short_name_is_found(self):
+        # the CI runner's temporary folder is C:\Users\RUNNER~1\...: git names it in full
+        import ctypes
+        buf = ctypes.create_unicode_buffer(1000)
+        ctypes.windll.kernel32.GetShortPathNameW(self.tmp.name, buf, 1000)
+        if buf.value in ("", self.tmp.name):
+            self.skipTest("this volume has no short names")
+        self.r.write("CLAUDE.md", "Rules.\n")
+        self.r.commit("2026-10-01T12:00:00+00:00")
+        self.r.load("2026-10-02T00:00:00Z", os.path.join(buf.value, "repo", "CLAUDE.md"), "Rules.")
+        [v] = self.versions()
+        self.assertEqual((v.git, v.commit_date, v.today), (True, "2026-10-01", "same"))
+
     def test_the_same_text_twice_is_one_row_with_two_loads(self):
         claude = self.r.write("CLAUDE.md", "Rules.\n")
         self.r.commit("2026-10-01T12:00:00+00:00")
