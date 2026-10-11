@@ -64,6 +64,35 @@ class TestCli(unittest.TestCase):
         self.assertEqual([(r["file"], r["responses"], r["total"]) for r in rows], [("a.jsonl", 7, 159160)])
         self.assertEqual(rows[0]["top"]["kind"], "unattributed")
 
+    def test_project_folder_ranks_sources_and_counts_subagents(self):
+        from test_acceptance import make_projects
+        with tempfile.TemporaryDirectory() as tmp:
+            make_projects(Path(tmp))
+            code, out = run_main(str(Path(tmp) / "projA"))
+        self.assertEqual(code, 0)
+        self.assertIn("projA: 2 transcripts and 1 subagent transcript, 21 responses, 477,480 input tokens", out)
+        read = next(line for line in out.splitlines() if line.endswith("tool: Read"))
+        self.assertEqual(read.split()[:6], ["31,200", "6.5%", "9,600", "3", "6,000", "-38%"])
+        lines = [line.split()[0] for line in out.splitlines() if line.startswith("  s")]
+        self.assertEqual(lines, ["s2.jsonl", "s1.jsonl"])
+        self.assertIn("(+1 subagent, 159,160 tokens)", out)
+
+    def test_folder_of_projects(self):
+        from test_acceptance import make_projects
+        with tempfile.TemporaryDirectory() as tmp:
+            make_projects(Path(tmp))
+            code, out = run_main(tmp, "--all")
+            _, js = run_main(tmp, "--json")
+        self.assertIn("2 projects, 3 transcripts and 1 subagent transcript", out)
+        self.assertIn("claude.md: CLAUDE.md  [projB]", out)
+        self.assertNotIn("more sources (--all)", out)
+        data = json.loads(js)
+        self.assertEqual(data["total"], 4 * 159160)
+        self.assertEqual(sum(s["cost"] for s in data["sources"]), data["total"])
+        self.assertEqual([(p["name"], p["transcripts"], p["subagents"]) for p in data["projects"]],
+                         [("projA", 2, 1), ("projB", 1, 0)])
+        self.assertEqual([r["session"] for r in data["subagents"]], ["s1"])
+
     def test_folder_refuses_per_transcript_options(self):
         with tempfile.TemporaryDirectory() as tmp, redirect_stdout(io.StringIO()):
             shutil.copy(example_path(), Path(tmp) / "a.jsonl")

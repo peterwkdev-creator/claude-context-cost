@@ -52,6 +52,14 @@ MUTANTS = [
      "ledger[OUTPUT] = ledger.get(OUTPUT, 0) + 0"),
     ("what entered = context difference minus output (criterion 1)", "attribute.py",
      "r.context - prev.context - prev.output, ratio)", "r.context - prev.context, ratio)"),
+    ("a project's own file keeps its project in a sum", "summary.py",
+     "project if _is_local(src.kind, src.name) else \"\"", "\"\""),
+    ("the user's own file is one source in every project", "summary.py",
+     "return kind in LOCAL_KINDS and", "return kind in LOCAL_KINDS or"),
+    ("a project's sum includes its subagents", "summary.py",
+     "sorted(folder.glob(\"*/subagents/*.jsonl\"), key=by_time)", "[]"),
+    ("a source's cost is summed over transcripts", "summary.py",
+     "t.cost += src.cost", "t.cost = src.cost"),
 ]
 
 

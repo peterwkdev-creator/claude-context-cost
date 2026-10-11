@@ -6,6 +6,7 @@ from pathlib import Path
 
 from . import __version__, example_path
 from .attribute import FLOOR, analyze
+from .summary import summarize
 
 TOP = 20
 
@@ -80,31 +81,74 @@ def as_json(rep):
     }
 
 
-def print_folder(folder, out, as_json_output=False):
-    files = sorted(folder.glob("*.jsonl"), key=lambda p: p.stat().st_mtime)
-    if not files:
-        if as_json_output:
-            json.dump({"folder": folder.name, "version": __version__, "transcripts": []}, out, indent=1)
-            out.write("\n")
-        else:
-            out.write(f"no .jsonl transcripts in {folder}\n")
-        return 1
-    rows = []
-    for f in files:
-        rep = analyze(f)
-        top = max(rep.sources.values(), key=lambda s: s.cost, default=None)
-        rows.append({"file": f.name, "responses": len(rep.responses), "compactions": rep.compactions,
-                     "total": rep.total,
-                     "top": {"kind": top.kind, "name": top.name, "cost": top.cost} if top else None})
+def plural(n, word):
+    return f"{n:,} {word}" + ("" if n == 1 else "s")
+
+
+def folder_json(s):
+    def row(r):
+        top = {"kind": r.top.kind, "name": r.top.name, "cost": r.top.cost} if r.top else None
+        d = {"file": r.file, "project": r.project, "responses": r.responses, "compactions": r.compactions,
+             "total": r.total, "top": top}
+        return {**d, "session": r.session} if r.session else d
+    return {
+        "folder": Path(s.path).name, "version": __version__, "responses": s.responses, "total": s.total,
+        "projects": [{"name": p, "transcripts": sum(1 for r in s.rows if r.project == p and not r.session),
+                      "subagents": sum(1 for r in s.rows if r.project == p and r.session),
+                      "responses": sum(r.responses for r in s.rows if r.project == p),
+                      "total": sum(r.total for r in s.rows if r.project == p)} for p in s.projects],
+        "transcripts": [row(r) for r in s.rows if not r.session],
+        "subagents": [row(r) for r in s.rows if r.session],
+        "sources": [{"kind": t.kind, "name": t.name, "project": t.project, "cost": t.cost, "entered": t.entered,
+                     "chars": t.chars, "transcripts": t.transcripts}
+                    for t in sorted(s.sources.values(), key=lambda t: -t.cost)],
+    }
+
+
+def print_folder(folder, top, out, as_json_output=False):
+    s = summarize(folder)
     if as_json_output:
-        json.dump({"folder": folder.name, "version": __version__, "transcripts": rows}, out, indent=1)
+        json.dump(folder_json(s), out, indent=1)
         out.write("\n")
+        return 0 if s.rows else 1
+    if not s.rows:
+        out.write(f"no .jsonl transcripts in {folder}\n")
+        return 1
+    sessions = [r for r in s.rows if not r.session]
+    many = len(s.projects) > 1
+    total = s.total or 1
+    head = f"{plural(len(s.projects), 'project')}, " if many else ""
+    out.write(f"{Path(s.path).name}: {head}{plural(len(sessions), 'transcript')} and "
+              f"{plural(len(s.rows) - len(sessions), 'subagent transcript')}, "
+              f"{plural(s.responses, 'response')}, {s.total:,} input tokens over all responses\n")
+    out.write("\ncost = tokens x responses it stayed in context, summed; entered = tokens it brought in; "
+              "in = transcripts it was in\n")
+    out.write(f"{'cost':>14} {'share':>6} {'entered':>11} {'in':>5}  {'chars/4':>11} {'error':>6}  source\n")
+    rows = sorted(s.sources.values(), key=lambda t: -t.cost)
+    for t in rows[:top]:
+        est = t.estimate_div4
+        err = f"{(est - t.entered) / t.entered:+.0%}" if est is not None and t.entered > 0 else "-"
+        est_txt = f"{est:,.0f}" if est is not None else "-"
+        where = f"  [{t.project}]" if many and t.project else ""
+        out.write(f"{t.cost:>14,} {t.cost / total:>6.1%} {t.entered:>11,} {t.transcripts:>5}  "
+                  f"{est_txt:>11} {err:>6}  {label((t.kind, t.name))}{where}\n")
+    if len(rows) > top:
+        rest = sum(t.cost for t in rows[top:])
+        out.write(f"{rest:>14,} {rest / total:>6.1%}  ... {len(rows) - top} more sources (--all)\n")
+    if many:
+        out.write("\nprojects, costliest first; run on a project's folder for its transcripts\n")
+        for p in sorted(folder_json(s)["projects"], key=lambda p: -p["total"]):
+            out.write(f"  {p['name']}  {plural(p['transcripts'], 'transcript')}, "
+                      f"{plural(p['subagents'], 'subagent')}, {p['responses']:>7,} responses  "
+                      f"{p['total']:>15,} tokens\n")
         return 0
-    out.write(f"{len(files)} transcripts in {folder.name} (oldest first); run on one file for the detail\n")
-    for r in rows:
-        top = r["top"]
-        top_txt = f"top: {label((top['kind'], top['name']))} {top['cost'] / (r['total'] or 1):.0%}" if top else ""
-        out.write(f"  {r['file']}  {r['responses']:>5} responses  {r['total']:>13,} tokens  {top_txt}\n")
+    out.write("\ntranscripts, oldest first; run on one file for the detail\n")
+    for r in sessions:
+        top_txt = f"top: {label((r.top.kind, r.top.name))} {r.top.cost / (r.total or 1):.0%}" if r.top else ""
+        subs = [x for x in s.rows if x.session == Path(r.file).stem]
+        sub_txt = (f"  (+{plural(len(subs), 'subagent')}, {sum(x.total for x in subs):,} tokens)"
+                   if subs else "")
+        out.write(f"  {r.file}  {r.responses:>5} responses  {r.total:>13,} tokens  {top_txt}{sub_txt}\n")
     return 0
 
 
@@ -114,8 +158,8 @@ def main(argv=None):
     ap = argparse.ArgumentParser(prog="claude-context-cost",
                                  description="How much each source costs in the context of a Claude Code "
                                              "session, counted from the API usage in its transcript.")
-    ap.add_argument("path", nargs="?", help="a transcript (.jsonl) or a folder of them "
-                                            "(usually ~/.claude/projects/<project>)")
+    ap.add_argument("path", nargs="?", help="a transcript (.jsonl), or a folder to sum: a project's "
+                                            "(~/.claude/projects/<project>) or ~/.claude/projects for all")
     ap.add_argument("--example", action="store_true", help="run on the synthetic transcript shipped with the tool")
     ap.add_argument("--steps", action="store_true", help="also show what entered before each response")
     ap.add_argument("--all", action="store_true", help="list every source, not only the top 20")
@@ -130,9 +174,9 @@ def main(argv=None):
     else:
         ap.error("give a transcript or a folder, or --example")
     if target.is_dir():
-        if a.steps or a.all:
-            ap.error("--steps and --all need one transcript, not a folder")
-        return print_folder(target, out, a.json)
+        if a.steps:
+            ap.error("--steps needs one transcript, not a folder")
+        return print_folder(target, 10 ** 9 if a.all else TOP, out, a.json)
     if not target.is_file():
         ap.error(f"not found: {target}")
     rep = analyze(target)

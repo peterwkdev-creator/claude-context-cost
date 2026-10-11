@@ -186,5 +186,67 @@ class TestSubagentTranscript(unittest.TestCase):
         self.assertEqual([r.ledger for r in rep.responses], EXPECTED_LEDGERS)
 
 
+def make_projects(root):
+    """projA: two sessions and a subagent of s1; projB: one session. Each is the example."""
+    import json
+    import os
+    text = example_path().read_text(encoding="utf-8")
+    side = "\n".join(json.dumps({**json.loads(x), "isSidechain": True}) if x.startswith('{"') else x
+                     for x in text.splitlines())
+    files = [("projA/s2.jsonl", text), ("projA/s1.jsonl", text),
+             ("projA/s1/subagents/agent-a.jsonl", side + "\n"), ("projB/s3.jsonl", text)]
+    for n, (name, body) in enumerate(files):
+        f = root / name
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(body, encoding="utf-8")
+        os.utime(f, (1_000_000 + n, 1_000_000 + n))   # s2 older than s1
+
+
+class TestSummary(unittest.TestCase):
+    """Sum over a project folder (its subagents included) and over a folder of projects."""
+
+    def setUp(self):
+        import tempfile
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        make_projects(self.root)
+
+    def test_project_folder_sums_its_sessions_and_subagents(self):
+        from claude_context_cost import summarize
+        s = summarize(self.root / "projA")
+        self.assertEqual(s.projects, ["projA"])
+        self.assertEqual([(r.file, r.session) for r in s.rows],
+                         [("s2.jsonl", ""), ("s1.jsonl", ""), ("agent-a.jsonl", "s1")])
+        self.assertEqual(s.total, 3 * 159160)
+        self.assertEqual(s.responses, 3 * 7)
+        read = s.sources.get(READ + ("",))
+        self.assertEqual(read and (read.cost, read.entered, read.transcripts), (3 * 10400, 3 * 3200, 3))
+        self.assertIn(PROJECT_MD + ("projA",), s.sources)
+        self.assertEqual({k[:2]: t.cost for k, t in s.sources.items()},
+                         {k: 3 * v for k, v in EXPECTED_COST.items()})
+
+    def test_folder_of_projects_keeps_project_files_apart(self):
+        from claude_context_cost import summarize
+        s = summarize(self.root)
+        self.assertEqual(s.projects, ["projA", "projB"])
+        self.assertEqual(s.total, 4 * 159160)
+        cost = {k: t.cost for k, t in s.sources.items()}
+        self.assertEqual(cost.get(READ + ("",)), 4 * 10400)
+        self.assertEqual(cost.get(USER_MD + ("",)), 4 * 2800)          # the user's file: one source
+        self.assertEqual(cost.get(MEMORY + ("",)), 4 * 1400)
+        self.assertEqual(cost.get(PROJECT_MD + ("projA",)), 3 * 5600)  # same name, two files
+        self.assertEqual(cost.get(PROJECT_MD + ("projB",)), 5600)
+        self.assertEqual(cost.get(PYTHON_RULE + ("projB",)), 1600)
+        self.assertNotIn(PROJECT_MD + ("",), cost)
+
+    def test_empty_folder(self):
+        from claude_context_cost import summarize
+        empty = self.root / "empty"
+        empty.mkdir()
+        s = summarize(empty)
+        self.assertEqual((s.projects, s.rows, s.total), ([], [], 0))
+
+
 if __name__ == "__main__":
     unittest.main()

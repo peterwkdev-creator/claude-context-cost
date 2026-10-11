@@ -21,7 +21,7 @@ English-language session (2026-10-10). Here every response adds up to its
 ## Install
 
 ```bash
-pip install "git+https://github.com/peterwkdev-creator/claude-context-cost@v1.2.0"
+pip install "git+https://github.com/peterwkdev-creator/claude-context-cost@v1.3.0"
 ```
 
 Python 3.11 or newer, no dependencies.
@@ -40,10 +40,15 @@ The newest `.jsonl` in a project's folder is its latest session (on Windows,
 `~` is `%USERPROFILE%`). A subagent has its own transcript,
 `<session-id>/subagents/agent-<id>.jsonl`.
 
-Pass a folder instead of a file for one line per transcript. `--steps` shows
-what entered before each response, `--all` lists every source, `--json` is
-for scripts (for a folder too). On the synthetic example shipped with the
-package:
+Pass a project's folder instead of a file to sum its sessions and their
+subagents: the costliest sources first, then one line per session. Pass
+`~/.claude/projects` itself to sum every project. Tools and your own
+`~/.claude/...` files add up across projects; a project's `CLAUDE.md` and
+rules stay apart, marked with the project.
+
+`--steps` shows what entered before each response, `--all` lists every
+source, `--json` is for scripts (for a folder too). On the synthetic example
+shipped with the package:
 
 ```text
         cost  share   entered    in    chars/4  error  how                  source
@@ -69,6 +74,10 @@ read = report.sources[("tool", "Read")]
 print(read.entered, read.responses, read.cost)  # 3200 4 10400
 print(read.estimate_div4)  # 2000.0: characters / 4 for the same text
 ```
+
+`summarize(folder)` returns the same sum as a folder on the command line:
+`.sources` maps `(kind, name, project)` to the totals, with `project` set only
+for a project's own files.
 
 ## Why
 
@@ -115,10 +124,11 @@ This tool fixes the first two from the transcript alone.
   exact, every response adds up to its `usage`, a `paths:` rule that never
   loaded counts 0, a response written over several lines counts once.
 - `python tests/mutate.py` breaks each of those rules in a copy of the code
-  (13 mutants); the tests catch all 13.
+  (17 mutants); the tests catch all 17.
 - On the author's machine (2026-10-10): 75 session transcripts and 382
   subagent transcripts, 91,347 responses, 0 where the sources differ from the
-  `usage`, 0 where the response count differs from an independent count. The
+  `usage`, 0 where the response count differs from an independent count, and
+  the sum over every project takes every transcript. The
   ratio was measured in 50 of the 73 sessions with responses, median 2.22
   bytes per token. Run it on yours with
   `CLAUDE_CONTEXT_COST_CORPUS=1 python -m unittest tests.test_corpus -v`
@@ -132,8 +142,8 @@ This tool fixes the first two from the transcript alone.
 - **Output includes thinking.** Thinking may leave the context later, so
   the previous output can be overcounted; the remainder then shows as
   negative unattributed tokens (191 of 91,347 responses).
-- **One transcript at a time.** A session's total does not include its
-  subagents; pass a subagent's file to count it.
+- **A session's total does not include its subagents**; the sum of its
+  project's folder does.
 - **English was measured in one session** (2026-10-10): 8 file reads, a
   license, release notes, two READMEs, three Python modules and a git log;
   median −40%, from −29% to −47%. The other numbers come from one person's

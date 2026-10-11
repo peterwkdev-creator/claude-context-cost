@@ -3,6 +3,21 @@
 The version follows `claude_context_cost.__version__`; each one has a `vX.Y.Z` tag on
 the commit that released it.
 
+## 1.3.0 — 2026-10-11
+
+- A folder is summed: a project's folder with its sessions and their subagents,
+  or `~/.claude/projects` with every project. The costliest sources come first,
+  each with the number of transcripts it was in; then one line per session
+  (with its subagents) or per project. `--all` works on a folder.
+- Tools and the user's own `~/.claude/...` files add up across projects; a
+  project's `CLAUDE.md` and rules keep their project, since the same name in two
+  projects is two files.
+- `summarize(folder)` in the API, with `Summary` and `Total`.
+- `--json` on a folder keeps `folder`, `version` and `transcripts` (now only the
+  sessions, each with its `project`) and adds `responses`, `total`, `projects`,
+  `subagents` and `sources`.
+- On the author's machine: 27 projects, 459 transcripts, every one in the sum.
+
 ## 1.2.0 — 2026-10-10
 
 - A subagent's own transcript (`<session-id>/subagents/agent-<id>.jsonl`) is read; it

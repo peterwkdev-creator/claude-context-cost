@@ -14,7 +14,7 @@ import os
 import unittest
 from pathlib import Path
 
-from claude_context_cost import analyze
+from claude_context_cost import analyze, summarize
 
 SETTING = os.environ.get("CLAUDE_CONTEXT_COST_CORPUS", "")
 BASE = Path.home() / ".claude" / "projects" if SETTING in ("", "1") else Path(SETTING)
@@ -60,6 +60,22 @@ class TestCorpus(unittest.TestCase):
               f"response count differs in {wrong_count} files; ratio calibrated in {calibrated}")
         self.assertEqual(off, 0)
         self.assertEqual(wrong_count, 0)
+
+    def test_the_sum_of_every_project_takes_every_transcript(self):
+        # live sessions keep writing, so compare with what existed before the sum, not totals file by file
+        sessions = sorted(BASE.glob("*/*.jsonl")) or sorted(BASE.glob("*.jsonl"))
+        subagents = sorted(BASE.glob("*/*/subagents/*.jsonl")) or sorted(BASE.glob("*/subagents/*.jsonl"))
+        before = {(f.parent.name, "", f.name) for f in sessions} | \
+                 {(f.parents[2].name, f.parent.parent.name, f.name) for f in subagents}
+        s = summarize(BASE)
+        if len(s.projects) == 1:   # BASE is one project's folder
+            before = {(s.projects[0], session, name) for _, session, name in before}
+        summed = {(r.project, r.session, r.file) for r in s.rows}
+        print(f"\n{len(s.projects)} projects, {len(s.rows)} transcripts, {s.responses} responses, "
+              f"{len(s.sources)} sources in the sum")
+        self.assertEqual(before - summed, set())
+        self.assertEqual(sum(t.cost for t in s.sources.values()), s.total)
+        self.assertEqual(s.total, sum(r.total for r in s.rows))
 
 
 if __name__ == "__main__":
