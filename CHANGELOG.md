@@ -3,6 +3,32 @@
 The version follows `claude_context_cost.__version__`; each one has a `vX.Y.Z` tag on
 the commit that released it.
 
+## 1.5.0 — 2026-10-11
+
+- `--versions`: for one transcript, which git commit of each `CLAUDE.md`,
+  rule and memory file the session loaded (the newest commit before the load
+  with exactly that text, or the first one after it, marked `(later)`), and
+  how today's file differs. Git is only read. `--json` adds `versions`;
+  `loaded_versions` and `Version` in the API.
+- On the author's machine: of 2,863 distinct texts loaded, only 290 are the
+  same on disk today; 811 were in git and the commit was found for 798 (the
+  other 13 were never committed); none of the 212 texts equal today and in
+  `HEAD` was missed (`tests/test_corpus.py`).
+- Budget fixes: `nan` and `inf` are not a ratio or a limit; a budget file
+  that is missing or not UTF-8 exits with 2 and a message, not a traceback;
+  every message names the budget file; an unquoted dotted pattern
+  (`CLAUDE.md = 1`) is named whole; an import inside a `~~~` block is not
+  followed; a Windows junction is not followed; `--budget ""` is an error.
+- Clearer output: "2 limits exceeded" instead of "passed", and a space after
+  the `loaded` column.
+- The README's links and image are absolute, so they work on PyPI too; the
+  PyPI page links the demo and this changelog, and its keywords are the
+  GitHub topics.
+- `SECURITY.md`: how to report a vulnerability privately, and what the tool
+  does not do (no network, no writes). The CI's actions are pinned by commit.
+- Mutation: 51 mutants (24 in the budget, 10 in `--versions`); the tests
+  catch all 51.
+
 ## 1.4.0 — 2026-10-11
 
 - Context budget for CI: `claude-context-cost --budget context-budget.toml

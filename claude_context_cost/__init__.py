@@ -5,10 +5,11 @@ from .attribute import Report, Source, analyze, attribute
 from .budget import Budget, BudgetError, check_budget
 from .summary import Summary, Total, summarize
 from .transcript import read
+from .versions import Version, loaded_versions
 
-__version__ = "1.4.0"
+__version__ = "1.5.0"
 __all__ = ["Budget", "BudgetError", "Report", "Source", "analyze", "attribute", "check_budget", "example_path",
-           "read", "Summary", "summarize", "Total", "__version__"]
+           "loaded_versions", "read", "Summary", "summarize", "Total", "Version", "__version__"]
 
 
 def example_path():

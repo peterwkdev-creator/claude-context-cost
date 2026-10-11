@@ -13,6 +13,7 @@ Loaded at start-up: CLAUDE.md, .claude/CLAUDE.md, CLAUDE.local.md, rules in
 on demand: rules with `paths:` and the CLAUDE.md of a subfolder, with their
 imports.
 """
+import math
 import re
 import tomllib
 from dataclasses import dataclass, field
@@ -25,7 +26,7 @@ FRONTMATTER = re.compile(r"\A---[ \t]*\n(.*?)\n---[ \t]*(?:\n|\Z)", re.S)
 COMMENT_BLOCK = re.compile(r"(?ms)^[ \t]*<!--.*?-->[ \t]*(?:\n|\Z)(?:[ \t]*\n)*")
 PATHS_KEY = re.compile(r"(?m)^paths[ \t]*:")
 IMPORT = re.compile(r"(?<![\w`])@((?:~|\.{1,2})?[\w./~-]*[\w-])")
-CODE_BLOCK = re.compile(r"(?ms)^[ \t]*```.*?^[ \t]*```")
+CODE_BLOCK = re.compile(r"(?ms)^[ \t]*(```|~~~).*?^[ \t]*\1")
 CODE_SPAN = re.compile(r"`[^`\n]*`")
 MAX_IMPORT_DEPTH = 5
 START_FILES = ("CLAUDE.md", ".claude/CLAUDE.md", "CLAUDE.local.md")
@@ -101,13 +102,18 @@ def _read(path):
     return path.read_bytes().decode("utf-8", errors="replace")
 
 
+def _is_junction(p):
+    # a Windows junction is not a symlink, and one pointing up would loop
+    return getattr(p, "is_junction", lambda: False)()
+
+
 def _subfolders_claude_md(root):
     """CLAUDE.md of each subfolder, skipping hidden folders and node_modules."""
     found, stack = [], [root]
     while stack:
         here = stack.pop()
         for p in sorted(here.iterdir()):
-            if p.is_dir() and not p.is_symlink():
+            if p.is_dir() and not p.is_symlink() and not _is_junction(p):
                 if not p.name.startswith(".") and p.name != "node_modules":
                     stack.append(p)
             elif p.name in ("CLAUDE.md", "CLAUDE.local.md") and here != root:
@@ -167,7 +173,10 @@ def scan(root, bytes_per_token=DEFAULT_BYTES_PER_TOKEN):
 
 
 def _glob(pattern):
-    """A glob on the relative path: * and ? stay inside one folder, **/ is any number of folders."""
+    """A glob on the relative path: * and ? stay inside one folder, **/ is any number of folders.
+
+    Every other character, [ and ] included, is itself.
+    """
     out, i = [], 0
     while i < len(pattern):
         if pattern.startswith("**/", i):
@@ -188,11 +197,11 @@ def _glob(pattern):
     return re.compile("".join(out))
 
 
-def _positive(value, what, number=int):
+def _positive(value, what, budget_file, number=int):
     ok = isinstance(value, (int, float) if number is float else int) and not isinstance(value, bool)
-    if not ok or value <= 0:
-        raise BudgetError(f"{what} must be a positive {'number' if number is float else 'integer'}, "
-                          f"not {value!r}")
+    if not ok or not math.isfinite(value) or value <= 0:
+        raise BudgetError(f"{budget_file}: {what} must be a positive "
+                          f"{'number' if number is float else 'integer'}, not {value!r}")
     return value
 
 
@@ -201,6 +210,10 @@ def load(budget_file):
     try:
         with open(budget_file, "rb") as fh:
             data = tomllib.load(fh)
+    except FileNotFoundError:
+        raise BudgetError(f"budget file not found: {budget_file}") from None
+    except UnicodeDecodeError:
+        raise BudgetError(f"{budget_file}: not UTF-8 text") from None
     except tomllib.TOMLDecodeError as e:
         raise BudgetError(f"{budget_file}: not valid TOML: {e}") from None
     unknown = sorted(set(data) - KEYS)
@@ -209,18 +222,21 @@ def load(budget_file):
                           f"the keys are {', '.join(sorted(KEYS))}")
     ratio = data.get("bytes_per_token")
     if ratio is not None:
-        _positive(ratio, "bytes_per_token", float)
+        _positive(ratio, "bytes_per_token", budget_file, float)
     start = data.get("startup")
     if start is not None:
-        _positive(start, "startup")
+        _positive(start, "startup", budget_file)
     limits = data.get("limits", {})
     if not isinstance(limits, dict):
         raise BudgetError(f"{budget_file}: [limits] must be a table of \"pattern\" = tokens")
     for pattern, limit in limits.items():
         if isinstance(limit, dict):
+            while isinstance(limit, dict) and limit:   # CLAUDE.md = 10 reads as {"CLAUDE": {"md": 10}}
+                key, limit = next(iter(limit.items()))
+                pattern += "." + key
             raise BudgetError(f"{budget_file}: quote the pattern \"{pattern}\" (a dot outside quotes "
                               f"makes a TOML table)")
-        _positive(limit, f"the limit for \"{pattern}\"")
+        _positive(limit, f"the limit for \"{pattern}\"", budget_file)
     if start is None and not limits:
         raise BudgetError(f"{budget_file}: no limit declared (startup or [limits])")
     return ratio, start, limits

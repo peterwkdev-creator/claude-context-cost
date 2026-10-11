@@ -94,8 +94,8 @@ class TestScan(unittest.TestCase):
         })
 
     def test_an_import_in_code_is_not_followed(self):
-        write(self.root, {"CLAUDE.md": "run `npm i @scope/pkg.md`\n```\n@block.md\n```\n",
-                          "scope/pkg.md": "no", "block.md": "no"})
+        write(self.root, {"CLAUDE.md": "run `npm i @scope/pkg.md`\n```\n@block.md\n```\n~~~\n@tilde.md\n~~~\n",
+                          "scope/pkg.md": "no", "block.md": "no", "tilde.md": "no"})
         files, _ = by_name(self.root)
         self.assertEqual(set(files), {"CLAUDE.md"})
 
@@ -185,15 +185,30 @@ class TestCheckBudget(unittest.TestCase):
             '[limits]\n"CLAUDE.md" = true\n': "positive",
             '[limits]\n"CLAUDE.md" = 1.5\n': "positive",
             'bytes_per_token = -1\nstartup = 9\n': "positive",
-            '[limits]\nCLAUDE.md = 400\n': "quote the pattern",
+            'bytes_per_token = nan\nstartup = 9\n': "positive",
+            'bytes_per_token = inf\nstartup = 9\n': "positive",
+            '[limits]\nCLAUDE.md = 400\n': 'quote the pattern "CLAUDE.md"',
             'limits = 3\n': "must be a table",
             'startup = \n': "not valid TOML",
             '# nothing\n': "no limit declared",
         }
         for text, message in cases.items():
             with self.subTest(budget=text):
-                with self.assertRaises(BudgetError) as e:
+                # ValueError, so that a wrong exception fails the test instead of erroring it
+                with self.assertRaises(ValueError) as e:
                     self.budget(text)
+                self.assertIsInstance(e.exception, BudgetError)
+                self.assertIn(message, str(e.exception))
+                self.assertIn("budget.toml: ", str(e.exception))
+
+    def test_a_budget_file_that_is_missing_or_not_utf8_is_invalid(self):
+        p = self.root / "latin1.toml"
+        p.write_bytes("startup = 9 # caf\xe9\n".encode("latin-1"))
+        for path, message in ((p, "not UTF-8"), (self.root / "missing.toml", "budget file not found")):
+            with self.subTest(path=path.name):
+                with self.assertRaises((ValueError, OSError)) as e:
+                    check_budget(self.root, path)
+                self.assertIsInstance(e.exception, BudgetError)
                 self.assertIn(message, str(e.exception))
 
 
@@ -228,8 +243,9 @@ class TestBudgetCli(unittest.TestCase):
     def test_the_table(self):
         _, out, _ = self.run_budget('[limits]\n"docs/CLAUDE.md" = 39\n')
         self.assertIn("2 instruction files, 2.25 bytes per token (default)", out)
-        self.assertIn("      400         -  start-up  claude.md: CLAUDE.md\n", out)
-        self.assertIn("       40        39  on demand claude.md: docs/CLAUDE.md  OVER\n", out)
+        self.assertIn("      400         -  start-up   claude.md: CLAUDE.md\n", out)
+        self.assertIn("       40        39  on demand  claude.md: docs/CLAUDE.md  OVER\n", out)
+        self.assertIn("over budget: 1 limit exceeded\n", out)
         self.assertIn('  claude.md: docs/CLAUDE.md: 40 tokens > 39 (limit "docs/CLAUDE.md")', out)
 
     def test_json(self):

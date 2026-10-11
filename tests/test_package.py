@@ -1,4 +1,4 @@
-"""The installed package: every non-.py file it reads goes with it (the package-data)."""
+"""The installed package: every non-.py file it reads goes with it (the package-data), and its metadata."""
 
 import tomllib
 import unittest
@@ -14,6 +14,19 @@ def _setuptools():
 
 
 class TestPackaging(unittest.TestCase):
+
+    def test_metadata_fits_github_about_and_topics(self):
+        # PyPI and GitHub show the same description and keywords: GitHub takes at most
+        # 20 topics, each lowercase letters, digits and hyphens, and 350 characters of About
+        project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+        keywords = project["keywords"]
+        self.assertLessEqual(len(keywords), 20)
+        self.assertEqual(len(set(keywords)), len(keywords))
+        for k in keywords:
+            self.assertRegex(k, r"^[a-z0-9][a-z0-9-]{0,49}$")
+        self.assertLessEqual(len(project["description"]), 350)
+        for name, url in project["urls"].items():
+            self.assertTrue(url.startswith("https://"), name)
 
     def test_package_files_in_package_data(self):
         # a data file passes in the checkout and silently goes missing after pip install

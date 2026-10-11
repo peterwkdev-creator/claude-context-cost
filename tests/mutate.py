@@ -1,9 +1,9 @@
-"""Mutation proof: break each counting or budget rule on purpose; the tests must fail.
+"""Mutation proof: break each counting, budget or versions rule on purpose; the tests must fail.
 
     python tests/mutate.py
 
 Each mutant changes one unique snippet in a copy of the package and runs
-`tests.test_acceptance` and `tests.test_budget` there. A mutant counts as caught only when the run ends
+the SUITE there. A mutant counts as caught only when the run ends
 in assertion failures (`failures=`), never in errors: an import or syntax
 error proves nothing. The clean copy runs first and the whole round stops if it
 is not green. Exit code 0 only if every mutant is caught.
@@ -16,7 +16,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SUITE = ("tests.test_acceptance", "tests.test_budget")
+SUITE = ("tests.test_acceptance", "tests.test_budget", "tests.test_versions")
 
 # (rule it breaks, file, snippet, replacement)
 MUTANTS = [
@@ -97,7 +97,37 @@ MUTANTS = [
     ("budget: an unknown key is an error", "budget.py",
      "if unknown:", "if False:"),
     ("budget: a limit is a positive integer", "budget.py",
-     "if not ok or value <= 0:", "if value <= 0:"),
+     "if not ok or not math.isfinite(value) or value <= 0:", "if not math.isfinite(value) or value <= 0:"),
+    ("budget: nan and inf are not a ratio", "budget.py",
+     "if not ok or not math.isfinite(value) or value <= 0:", "if not ok or value <= 0:"),
+    ("budget: a budget file that is not UTF-8 is invalid", "budget.py",
+     "except UnicodeDecodeError:", "except KeyError:"),
+    ("budget: a missing budget file is invalid", "budget.py",
+     "except FileNotFoundError:", "except KeyError:"),
+    ("budget: an import in a ~~~ block is not followed", "budget.py",
+     "(```|~~~)", "(```)"),
+    ("budget: an unquoted dotted pattern is named whole", "budget.py",
+     "pattern += \".\" + key", "pass"),
+    ("versions: git's file is rendered before comparing", "versions.py",
+     "if _same(render(blob, start), text)]", "if _same(blob, text)]"),
+    ("versions: line endings do not matter", "versions.py",
+     "return a.replace(\"\\r\\n\", \"\\n\") == b.replace(\"\\r\\n\", \"\\n\")", "return a == b"),
+    ("versions: the newest commit before the load", "versions.py",
+     "h, t = before[0] if before else hits[-1]", "h, t = hits[0]"),
+    ("versions: only a commit up to the load counts as before", "versions.py",
+     "x[1] <= when]", "x[1] <= when + 10**9]"),
+    ("versions: a commit after the load is marked", "versions.py",
+     "v.commit, v.committed_after = h, not before", "v.commit, v.committed_after = h, False"),
+    ("versions: the same text loaded twice is one line", "versions.py",
+     "if key in seen:", "if False:"),
+    ("versions: today's file is compared", "versions.py",
+     "v.today = \"same\" if now == text else \"changed\"", "v.today = \"changed\""),
+    ("versions: a deleted file is still found in git", "versions.py",
+     "while not d.is_dir():", "while False:"),
+    ("versions: a subagent's lines in a session are skipped", "versions.py",
+     "(skip_side and e.get(\"isSidechain\"))", "(False)"),
+    ("versions: only .md files are read", "versions.py",
+     "if not p.lower().endswith(\".md\"):", "if False:"),
 ]
 
 

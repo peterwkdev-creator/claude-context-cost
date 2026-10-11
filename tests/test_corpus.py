@@ -11,13 +11,16 @@ Subagent transcripts (`<session>/subagents/*.jsonl`) are checked too.
 """
 import json
 import os
+import subprocess
 import unittest
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
-from claude_context_cost import analyze, summarize
+from claude_context_cost import analyze, loaded_versions, summarize
 from claude_context_cost.budget import scan
 from claude_context_cost.transcript import _norm, short_path
+from claude_context_cost.versions import _top
 
 SETTING = os.environ.get("CLAUDE_CONTEXT_COST_CORPUS", "")
 BASE = Path.home() / ".claude" / "projects" if SETTING in ("", "1") else Path(SETTING)
@@ -159,6 +162,31 @@ class TestCorpus(unittest.TestCase):
         self.assertEqual(start_same, start)
         self.assertEqual(on_demand_same, on_demand)
         self.assertEqual(bytes_ok, bytes_seen)
+
+    def test_versions_find_every_committed_file_that_is_unchanged_today(self):
+        # a text equal to today's file, which equals HEAD's, has its commit: none may be missed
+        c, clean, missed = Counter(), {}, 0
+        for f in sorted(BASE.glob("**/*.jsonl")):
+            for v in loaded_versions(f, 2.25):
+                c["texts"] += 1
+                c[f"today {v.today or 'not looked up'}"] += 1
+                c["in git, commit found" if v.commit else "in git, not committed" if v.git else "no git"] += 1
+                c["committed later"] += v.committed_after
+                if v.today != "same" or not v.git:
+                    continue
+                if v.path not in clean:
+                    top, rel = _top(v.path)
+                    r = subprocess.run(["git", "--literal-pathspecs", "-C", top, "diff", "--quiet", "HEAD",
+                                        "--", rel], capture_output=True)
+                    tracked = subprocess.run(["git", "--literal-pathspecs", "-C", top, "ls-files", "--error-unmatch",
+                                              "--", rel], capture_output=True)
+                    clean[v.path] = r.returncode == 0 and tracked.returncode == 0
+                if clean[v.path]:
+                    c["same today and as HEAD"] += 1
+                    missed += not v.commit
+        print("\nversions: " + ", ".join(f"{k} {n}" for k, n in sorted(c.items())) + f", missed {missed}")
+        self.assertGreater(c["same today and as HEAD"], 0)
+        self.assertEqual(missed, 0)
 
 
 if __name__ == "__main__":

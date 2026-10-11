@@ -4,14 +4,17 @@ How much each source (your `CLAUDE.md`, rules, skills, memory, tool results)
 costs in the context of a Claude Code session, counted from the API `usage`
 recorded in its transcript, not estimated from characters.
 
-![The page counts the synthetic example, then a transcript file](docs/demo.gif)
+![The page counts the synthetic example, then a transcript file](https://raw.githubusercontent.com/peterwkdev-creator/claude-context-cost/main/docs/demo.gif)
 
 **[Try it in the browser](https://peterwkdev-creator.github.io/claude-context-cost/)**:
 choose one of your transcripts, or run the synthetic example. The library runs
 in the page (Pyodide); your file is never uploaded.
 
 In CI, [`--budget`](#context-budget-in-ci) fails a pull request that makes a
-`CLAUDE.md`, a rule or an import pass the limit you declared.
+`CLAUDE.md`, a rule or an import grow over the limit you declared.
+[`--versions`](#which-version-a-session-loaded) shows which git commit of each
+`CLAUDE.md`, rule and memory file a session loaded, and whether the file
+changed since.
 
 The usual estimate, characters / 4, **undercounts by 40 to 45%**: −45% over
 5,365 steps of the author's sessions, mostly in Portuguese, and −40% in an
@@ -31,7 +34,7 @@ Python 3.11 or newer, no dependencies. To install a tagged version straight
 from GitHub instead:
 
 ```bash
-pip install "git+https://github.com/peterwkdev-creator/claude-context-cost@v1.4.0"
+pip install "git+https://github.com/peterwkdev-creator/claude-context-cost@v1.5.0"
 ```
 
 ## Usage
@@ -87,13 +90,45 @@ print(read.estimate_div4)  # 2000.0: characters / 4 for the same text
 `.sources` maps `(kind, name, project)` to the totals, with `project` set only
 for a project's own files.
 
+## Which version a session loaded
+
+A transcript keeps the text of every `CLAUDE.md`, rule and memory file as it
+was loaded, and the counts above use that text. `--versions` finds it in git:
+
+```bash
+claude-context-cost --versions ~/.claude/projects/<project-folder>/<session-id>.jsonl
+```
+
+```text
+CLAUDE.md, rules and memory as this session loaded them: their git version, and today's file
+
+   tokens  loads  version                         today           file
+      337      1  no git                          same            claude.md: ~/.claude/CLAUDE.md
+      871      1  1c3456f 2026-10-05              +289 tokens     claude.md: CLAUDE.md
+      248      1  not committed                   same            rule: .claude/rules/style.md
+      160      1  5c41635 2026-10-08 (later)      same            rule: .claude/rules/tests.md
+      680      2  e8e382b 2026-10-01              not found       path rule: .claude/rules/api.md
+
+version: the commit with exactly this text; (later): committed only after it was loaded
+  not committed: no commit has this text; no git: the file is not in a git repository
+today: the file now, as Claude Code would load it
+```
+
+- **version** is the newest commit made before the load whose file renders
+  to exactly the loaded text (line endings aside). If the text was committed
+  only afterwards, it is the first such commit, marked `(later)`.
+- **today** compares the file on disk now: `+289 tokens` means it grew by
+  that much since the session loaded it.
+- Git is only read (`git log`, `git cat-file`), never written. `--json` adds
+  the list under `"versions"`; from Python, `loaded_versions(transcript)`.
+
 ## Context budget in CI
 
 There is no transcript in CI, so `--budget` measures the repository itself:
 every `CLAUDE.md`, rule and `@import` Claude Code would load from it, as
 Claude Code renders them (frontmatter and HTML comment blocks out), held to the
-limits you declare. It exits with 1 when a limit is passed, so a pull request
-that bloats the context fails.
+limits you declare. It exits with 1 when a limit is exceeded, so a pull
+request that bloats the context fails.
 
 ```toml
 # context-budget.toml, at the root of the repository
@@ -112,15 +147,15 @@ claude-context-cost --budget context-budget.toml
 ```text
 context budget: 5 instruction files, 2.25 bytes per token (default)
 
-   tokens     limit  loaded    file
-      622     1,500  start-up  rule: .claude/rules/style.md
-    1,705     2,000  start-up  claude.md: CLAUDE.md
-    1,066         -  start-up  claude.md: docs/architecture.md (imported by CLAUDE.md)
-    1,813     1,500  on demand path rule: .claude/rules/api.md  OVER
-      427     2,000  on demand claude.md: web/CLAUDE.md
+   tokens     limit  loaded     file
+      622     1,500  start-up   rule: .claude/rules/style.md
+    1,705     2,000  start-up   claude.md: CLAUDE.md
+    1,066         -  start-up   claude.md: docs/architecture.md (imported by CLAUDE.md)
+    1,813     1,500  on demand  path rule: .claude/rules/api.md  OVER
+      427     2,000  on demand  claude.md: web/CLAUDE.md
     3,393     3,000  start-up total  OVER
 
-over budget: 2 limits passed
+over budget: 2 limits exceeded
   path rule: .claude/rules/api.md: 1,813 tokens > 1,500 (limit ".claude/rules/*.md")
   start-up total: 3,393 tokens > 3,000 (limit startup)
 ```
@@ -134,10 +169,13 @@ over budget: 2 limits passed
 - **Tokens are bytes / a ratio**: 2.25 bytes per token by default, or
   `bytes_per_token = ...` in the budget. Running the tool on one of your
   transcripts prints the ratio measured in it.
+- **Patterns**: only `*`, `?` and `**/` are special; `[` and `]` are plain
+  characters. Quote a pattern with a dot, as above: TOML reads `CLAUDE.md = 1`
+  as a nested key.
 - **An invalid budget exits with 2**, never passes: a typo in a key, a limit
-  that is not a positive integer, or a pattern that matches no file (it would
-  leave a file without its limit). An import that resolves outside the
-  repository is listed, not counted.
+  that is not a positive integer, a pattern that matches no file (it would
+  leave a file without its limit), a missing budget file, or a wrong command
+  line. An import that resolves outside the repository is listed, not counted.
 
 In a GitHub Actions workflow:
 
@@ -145,7 +183,7 @@ In a GitHub Actions workflow:
 - uses: actions/setup-python@v7
   with:
     python-version: "3.x"
-- run: pip install claude-context-cost==1.4.0
+- run: pip install claude-context-cost==1.5.0
 - run: claude-context-cost --budget context-budget.toml
 ```
 
@@ -166,9 +204,11 @@ the context by source. Read in its code at commit `1486f20` (the latest on
   [#224](https://github.com/matt1398/claude-devtools/issues/224), open since
   2026-07-17.
 - `CLAUDE.md` and rules are read from disk today, not as they were during the
-  session.
+  session. On the author's machine (2026-10-11), only 290 of the 2,863
+  distinct texts loaded were still the same on disk.
 
-This tool fixes the first two from the transcript alone.
+This tool fixes all three: it counts from the `usage` and from the text the
+transcript kept, and `--versions` finds that text in git.
 
 ## What it counts
 
@@ -199,9 +239,11 @@ This tool fixes the first two from the transcript alone.
   loaded counts 0, a response written over several lines counts once.
 - The budget is tested on synthetic repositories (`tests/test_budget.py`):
   what loads at start-up and on demand, imports, rendering, limits, invalid
-  budgets.
+  budgets. `--versions` is tested on synthetic git repositories
+  (`tests/test_versions.py`): a commit before and after the load, a text that
+  comes back, a deleted file, a file outside git.
 - `python tests/mutate.py` breaks each of those rules in a copy of the code
-  (36 mutants, 19 of them in the budget); the tests catch all 36.
+  (51 mutants: 24 in the budget, 10 in `--versions`); the tests catch all 51.
 - On the author's machine (2026-10-10): 75 session transcripts and 382
   subagent transcripts, 91,347 responses, 0 where the sources differ from the
   `usage`, 0 where the response count differs from an independent count, and
@@ -210,7 +252,10 @@ This tool fixes the first two from the transcript alone.
   257 start-ups and 252 of 252 on-demand loads, with the same bytes in 268
   of 268 files (loads whose files changed afterwards are left out). The
   ratio was measured in 50 of the 73 sessions with responses, median 2.22
-  bytes per token. Run it on yours with
+  bytes per token. For `--versions` (2026-10-11): of 2,863 distinct texts
+  loaded, 811 were in a git repository and the commit was found for 798; the
+  other 13 were never committed. Every one of the 212 texts that are the same
+  today and in `HEAD` got its commit. Run it on yours with
   `CLAUDE_CONTEXT_COST_CORPUS=1 python -m unittest tests.test_corpus -v`
   (it prints only counts).
 
@@ -232,6 +277,9 @@ This tool fixes the first two from the transcript alone.
   the ratio. And it counts every `@import` that resolves to a file: on the
   author's machine Claude Code loaded 32 of 35 such imports, with no rule
   found for the other 3, so the budget may count more than loads, never less.
+- **`--versions` finds only the exact text.** A commit that differs by one
+  character is not it; the file is then `not committed`. It needs `git` on
+  the `PATH`, and it reads only `.md` files.
 - The transcript format is not documented and changes between versions.
 
 ## Compatibility
@@ -247,9 +295,11 @@ patch version.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Never paste a real transcript in an
+See [CONTRIBUTING.md](https://github.com/peterwkdev-creator/claude-context-cost/blob/main/CONTRIBUTING.md). Never paste a real transcript in an
 issue or pull request: it holds paths, file contents and sometimes secrets.
+Report a security problem privately, as in
+[SECURITY.md](https://github.com/peterwkdev-creator/claude-context-cost/blob/main/SECURITY.md).
 
 ## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/peterwkdev-creator/claude-context-cost/blob/main/LICENSE)

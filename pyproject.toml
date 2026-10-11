@@ -6,14 +6,20 @@ build-backend = "setuptools.build_meta"
 name = "claude-context-cost"
 # One source for the version: the package's __version__ (read without importing).
 dynamic = ["version"]
-description = "How much each source (CLAUDE.md, rules, skills, memory, tool results) costs in the context of a Claude Code session, counted from the API usage in its transcript."
+# The description and keywords are also the repository's About and topics on GitHub, set from here
+# with `gh repo edit`; tests/test_package.py keeps them within GitHub's limits.
+description = "How much each source (CLAUDE.md, rules, skills, memory, tool results) costs in the context of a Claude Code session, counted from the API usage in its transcript. Also a context budget for CI, and the git version of each file a session loaded."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Peter" }]
 requires-python = ">=3.11"
 dependencies = []
-keywords = ["claude-code", "context-window", "tokens", "transcript", "cli", "ci", "claude-md"]
+keywords = [
+    "claude-code", "claude", "anthropic", "claude-md", "claude-code-transcripts", "context-window",
+    "context-engineering", "tokens", "token-counting", "token-usage", "prompt-caching", "cost-analysis",
+    "llm", "cli", "ci", "developer-tools", "observability", "python", "jsonl", "pyodide",
+]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
@@ -32,6 +38,8 @@ claude-context-cost = "claude_context_cost.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/peterwkdev-creator/claude-context-cost"
+Demo = "https://peterwkdev-creator.github.io/claude-context-cost/"
+Changelog = "https://github.com/peterwkdev-creator/claude-context-cost/blob/main/CHANGELOG.md"
 Issues = "https://github.com/peterwkdev-creator/claude-context-cost/issues"
 
 [tool.setuptools]

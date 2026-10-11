@@ -25,6 +25,10 @@ read = report.sources[("tool", "Read")]
 assert (report.total, read.entered, read.responses, read.cost) == (159160, 3200, 4, 10400), report.total
 print("installed package: README example OK")
 '
+# --versions, through what pip installed: the example's files are not on this
+# machine, so its CLAUDE.md has no git and no file today.
+"$venv/bin/claude-context-cost" --example --versions | grep -E "^ +800 +2 +no git +not found +claude\.md: CLAUDE\.md$"
+echo "installed package: versions OK"
 # The budget, through what pip installed: a repository of one CLAUDE.md of
 # 900 bytes (400 tokens), within its limit (exit 0) and over it (exit 1).
 mkdir -p orcamento

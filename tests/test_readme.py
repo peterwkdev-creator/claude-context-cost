@@ -31,6 +31,21 @@ class TestReadmeExamples(unittest.TestCase):
         self.assertTrue(pins, "the README CI example does not pin the version")
         self.assertEqual(set(pins), {__version__})
 
+    def test_links_work_on_pypi_too(self):
+        # PyPI shows the README without the repository, so a relative link or image breaks there;
+        # an anchor must name a heading of the README
+        text = README.read_text(encoding="utf-8")
+        anchors = {re.sub(r"[^\w\- ]", "", h).strip().lower().replace(" ", "-")
+                   for h in re.findall(r"^#+ (.+)$", text, re.M)}
+        links = re.findall(r"\]\(([^)\s]+)\)", text)
+        self.assertGreater(len(links), 5)
+        for link in links:
+            with self.subTest(link=link):
+                if link.startswith("#"):
+                    self.assertIn(link[1:], anchors)
+                else:
+                    self.assertTrue(link.startswith("https://"), "use an absolute https link")
+
 
 if __name__ == "__main__":
     unittest.main()

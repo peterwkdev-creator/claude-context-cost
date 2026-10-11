@@ -2,12 +2,14 @@
 import argparse
 import json
 import sys
+from dataclasses import asdict
 from pathlib import Path
 
 from . import __version__, example_path
 from .attribute import FLOOR, analyze
 from .budget import BudgetError, check_budget
 from .summary import summarize
+from .versions import loaded_versions
 
 TOP = 20
 
@@ -64,6 +66,32 @@ def print_steps(rep, out):
         if rest:
             out.write(f"    {rest:>+9,}  unattributed\n")
         prev = r
+
+
+def version_text(v):
+    if v.commit:
+        return f"{v.commit[:7]} {v.commit_date}" + (" (later)" if v.committed_after else "")
+    return "not committed" if v.git else "no git"
+
+
+def today_text(v):
+    if v.today == "changed":
+        return f"{v.today_tokens:+,} tokens" if v.today_tokens else "changed"
+    return v.today or "-"
+
+
+def print_versions(vs, out):
+    out.write("CLAUDE.md, rules and memory as this session loaded them: their git version, and today's file\n")
+    if not vs:
+        out.write("\nnone loaded\n")
+        return
+    out.write(f"\n{'tokens':>9} {'loads':>6}  {'version':<30}  {'today':<14}  file\n")
+    for v in vs:
+        out.write(f"{v.tokens:>9,} {v.loads:>6}  {version_text(v):<30}  {today_text(v):<14}  "
+                  f"{label((v.kind, v.name))}\n")
+    out.write("\nversion: the commit with exactly this text; (later): committed only after it was loaded\n"
+              "  not committed: no commit has this text; no git: the file is not in a git repository\n"
+              "today: the file now, as Claude Code would load it\n")
 
 
 def as_json(rep):
@@ -170,12 +198,12 @@ def print_budget(b, out):
     ratio = "default" if b.ratio_is_default else f"declared in {Path(b.budget_file).name}"
     out.write(f"context budget: {plural(len(b.files), 'instruction file')}, "
               f"{b.bytes_per_token:.2f} bytes per token ({ratio})\n")
-    out.write(f"\n{'tokens':>9} {'limit':>9}  {'loaded':<9} file\n")
+    out.write(f"\n{'tokens':>9} {'limit':>9}  {'loaded':<9}  file\n")
     for f in b.files:
         limit = f"{f.limit:,}" if f.limit is not None else "-"
         mark = "  OVER" if f.limit is not None and f.tokens > f.limit else ""
         via = f" (imported by {f.imported_by})" if f.imported_by else ""
-        out.write(f"{f.tokens:>9,} {limit:>9}  {'start-up' if f.start else 'on demand':<9} "
+        out.write(f"{f.tokens:>9,} {limit:>9}  {'start-up' if f.start else 'on demand':<9}  "
                   f"{label((f.kind, f.name))}{via}{mark}\n")
     limit = f"{b.start_limit:,}" if b.start_limit is not None else "-"
     mark = "  OVER" if b.start_limit is not None and b.start_tokens > b.start_limit else ""
@@ -186,7 +214,7 @@ def print_budget(b, out):
     if b.ok:
         out.write("\nwithin budget\n")
         return 0
-    out.write(f"\nover budget: {plural(len(b.over), 'limit')} passed\n")
+    out.write(f"\nover budget: {plural(len(b.over), 'limit')} exceeded\n")
     for o in b.over:
         what = label((o.kind, o.name)) if o.kind else o.name
         where = f" (limit \"{o.pattern}\")" if o.pattern else " (limit startup)"
@@ -214,21 +242,28 @@ def main(argv=None):
                                  description="How much each source costs in the context of a Claude Code "
                                              "session, counted from the API usage in its transcript.")
     ap.add_argument("path", nargs="?", help="a transcript (.jsonl), or a folder to sum: a project's "
-                                            "(~/.claude/projects/<project>) or ~/.claude/projects for all")
+                                            "(~/.claude/projects/<project>) or ~/.claude/projects for all; "
+                                            "with --budget, the repository folder (default: the current one)")
     ap.add_argument("--example", action="store_true", help="run on the synthetic transcript shipped with the tool")
     ap.add_argument("--steps", action="store_true", help="also show what entered before each response")
     ap.add_argument("--all", action="store_true", help="list every source, not only the top 20")
+    ap.add_argument("--versions", action="store_true",
+                    help="also show which git commit had each CLAUDE.md, rule and memory file exactly as the "
+                         "session loaded it, and how today's file differs")
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     ap.add_argument("--budget", metavar="FILE",
-                    help="check a repository (the path, or the current folder) against the limits in a TOML "
-                         "file: the CLAUDE.md, rules and imports Claude Code loads from it, in estimated "
-                         "tokens; exit code 1 if a limit is passed, 2 if the budget file is invalid")
+                    help="check a repository against the limits in a TOML file: the CLAUDE.md, rules and "
+                         "imports Claude Code loads from it, in estimated tokens; exit code 1 if a limit is "
+                         "exceeded, 2 if the budget file or the command line is invalid")
     ap.add_argument("--version", action="version", version=f"claude-context-cost {__version__}")
     a = ap.parse_args(argv)
     out = sys.stdout
-    if a.budget:
-        if a.example or a.steps or a.all:
-            ap.error("--budget takes a repository folder; --example, --steps and --all are for transcripts")
+    if a.budget is not None:
+        if not a.budget:
+            ap.error("--budget needs a file name")
+        if a.example or a.steps or a.all or a.versions:
+            ap.error("--budget takes a repository folder; --example, --steps, --all and --versions are for "
+                     "transcripts")
         root = Path(a.path or ".").expanduser()
         if not root.is_dir():
             ap.error(f"--budget needs a repository folder: {root}")
@@ -240,18 +275,25 @@ def main(argv=None):
     else:
         ap.error("give a transcript or a folder, or --example")
     if target.is_dir():
-        if a.steps:
-            ap.error("--steps needs one transcript, not a folder")
+        if a.steps or a.versions:
+            ap.error("--steps and --versions need one transcript, not a folder")
         return print_folder(target, 10 ** 9 if a.all else TOP, out, a.json)
     if not target.is_file():
         ap.error(f"not found: {target}")
     rep = analyze(target)
+    vs = loaded_versions(target, rep.bytes_per_token) if a.versions else None
     if a.json:
-        json.dump(as_json(rep), out, indent=1)
+        data = as_json(rep)
+        if vs is not None:
+            data["versions"] = [asdict(v) for v in vs]
+        json.dump(data, out, indent=1)
         out.write("\n")
         return 0
     print_report(rep, len(rep.sources) if a.all else TOP, out)
     if a.steps:
         out.write("\n")
         print_steps(rep, out)
+    if vs is not None:
+        out.write("\n")
+        print_versions(vs, out)
     return 0
