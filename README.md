@@ -48,7 +48,7 @@ Python 3.11 or newer, no dependencies. To install a tagged version straight
 from GitHub instead:
 
 ```bash
-pip install "git+https://github.com/peterwkdev-creator/claude-context-cost@v1.6.2"
+pip install "git+https://github.com/peterwkdev-creator/claude-context-cost@v1.6.3"
 ```
 
 ## Usage
@@ -228,7 +228,7 @@ In a GitHub Actions workflow:
 - uses: actions/setup-python@v7
   with:
     python-version: "3.x"
-- run: pip install claude-context-cost==1.6.2
+- run: pip install claude-context-cost==1.6.3
 - run: claude-context-cost --budget context-budget.toml
 ```
 

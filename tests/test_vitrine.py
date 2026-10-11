@@ -80,6 +80,15 @@ class Projeto(unittest.TestCase):
             self.assertEqual(sorted(p.name for p in (Path(tmp) / "site").iterdir()),
                              ["index.html", "pacote.zip", "vitrine.json"])
 
+    def test_pagina_ja_traz_idioma_titulo_e_descricao(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            montar.montar(RAIZ, Path(tmp) / "site")
+            html = (Path(tmp) / "site" / "index.html").read_text(encoding="utf-8")
+        self.assertIn(f'<html lang="{CFG["lang"]}">', html)
+        self.assertIn(f'<title>{CFG["titulo"]}</title>', html)
+        self.assertIn('<meta name="description" content="Choose a Claude Code transcript', html)
+        self.assertNotIn("Vitrine</title>", html)
+
     def test_saida_com_outra_coisa_e_recusada_intacta(self):
         with tempfile.TemporaryDirectory() as tmp:
             alheio = Path(tmp) / "importante.txt"

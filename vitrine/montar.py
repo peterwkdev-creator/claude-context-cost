@@ -21,6 +21,7 @@ import json
 import shutil
 import sys
 import zipfile
+from html import escape
 from pathlib import Path
 
 AQUI = Path(__file__).resolve().parent
@@ -216,6 +217,19 @@ def arquivos_do_pacote(raiz, pacote):
 SAIDA = {"index.html", "vitrine.json", "pacote.zip"}
 
 
+def pagina(html, cfg):
+    """index.html com idioma, título e descrição da configuração já no HTML: leitor
+    de tela e buscador leem antes de o script rodar (ou sem ele)."""
+    trocas = ((b'<html lang="pt-BR">', f'<html lang="{escape(cfg.get("lang", "pt-BR"))}">'),
+              (b"<title>Vitrine</title>", f'<title>{escape(cfg["titulo"])}</title>\n'
+                                          f'<meta name="description" content="{escape(cfg["descricao"])}">'))
+    for velho, novo in trocas:
+        if html.count(velho) != 1:
+            raise SystemExit(f"vitrine: index.html sem {velho.decode()}")
+        html = html.replace(velho, novo.encode("utf-8"))
+    return html
+
+
 def montar(raiz, saida):
     cfg = json.loads((raiz / "vitrine" / "vitrine.json").read_text(encoding="utf-8"))
     # Só regrava o que ela mesma escreve: pasta com outra coisa (a raiz, o
@@ -225,8 +239,8 @@ def montar(raiz, saida):
         if alheios:
             raise SystemExit(f"vitrine: {saida} tem o que o montar não escreveu ({', '.join(alheios[:5])}); recusado")
     saida.mkdir(parents=True, exist_ok=True)
-    for nome in ("index.html", "vitrine.json"):
-        shutil.copyfile(raiz / "vitrine" / nome, saida / nome)
+    shutil.copyfile(raiz / "vitrine" / "vitrine.json", saida / "vitrine.json")
+    (saida / "index.html").write_bytes(pagina((raiz / "vitrine" / "index.html").read_bytes(), cfg))
     entradas = [(p, p.relative_to(raiz).as_posix()) for p in arquivos_do_pacote(raiz, cfg["pacote"])]
     entradas.append((raiz / "vitrine" / "vitrine.py", "vitrine.py"))
     with zipfile.ZipFile(saida / "pacote.zip", "w", zipfile.ZIP_DEFLATED) as z:

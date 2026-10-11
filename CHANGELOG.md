@@ -3,6 +3,12 @@
 The version follows `claude_context_cost.__version__`; each one has a `vX.Y.Z` tag on
 the commit that released it.
 
+## 1.6.3 — 2026-10-11
+
+- The demo page is built with its language (English), title and description
+  in the HTML itself, so screen readers and search engines get them before
+  any script runs. No change in the library.
+
 ## 1.6.2 — 2026-10-11
 
 - A file with no responses (not a transcript, or the wrong file) prints what
