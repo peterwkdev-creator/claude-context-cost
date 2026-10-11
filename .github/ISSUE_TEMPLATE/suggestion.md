@@ -14,4 +14,4 @@ company.
 
 **Version**
 
-<!-- Output of `python -m claude_context_cost --version`. -->
+<!-- Output of `claude-context-cost --version`. -->

@@ -127,6 +127,21 @@ class TestCli(unittest.TestCase):
             with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
                 main([tmp, "--steps"])
 
+    def test_a_file_that_is_not_a_transcript_says_so(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Path(tmp) / "notes.jsonl"
+            f.write_text('{"type": "user"}\nnot json\n', encoding="utf-8")
+            err = io.StringIO()
+            with redirect_stdout(io.StringIO()) as out, contextlib.redirect_stderr(err):
+                code = main([str(f)])
+        self.assertEqual((code, out.getvalue()), (1, ""))
+        self.assertIn("no responses with usage in notes.jsonl: is it a Claude Code transcript", err.getvalue())
+
+    def test_example_takes_no_path(self):
+        with self.assertRaises(SystemExit) as e, contextlib.redirect_stderr(io.StringIO()):
+            main(["--example", "some.jsonl"])
+        self.assertEqual(e.exception.code, 2)
+
     def test_version_as_a_module(self):
         p = subprocess.run([sys.executable, "-m", "claude_context_cost", "--version"],
                            cwd=ROOT, capture_output=True)

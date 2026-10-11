@@ -1,5 +1,5 @@
 name: Unexpected result
-description: The library gave a result that differs from your own count or from the source, or a case is missing.
+description: The library gave a result that differs from your own count or from the documentation.
 title: "Unexpected result: "
 body:
   - type: markdown
@@ -13,7 +13,7 @@ body:
     id: version
     attributes:
       label: Version
-      description: "Output of `python -m claude_context_cost --version`."
+      description: "Output of `claude-context-cost --version`."
     validations:
       required: true
   - type: textarea

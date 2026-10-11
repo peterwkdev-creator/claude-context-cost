@@ -1,8 +1,8 @@
-# Dependabot só para as actions dos workflows. Mora em .github/dependabot.yml
-# e liga sozinho com o arquivo no main, sem mexer em Settings. Um PR por mês
-# com todas as actions juntas; ele só entra com o CI verde e o sim do dono.
-# Sem ele, uma action com runtime descontinuado (checkout@v4 no Node 20)
-# só aparece quando alguém lê o aviso do run.
+# Dependabot only for the workflows' actions. It turns on by itself with this
+# file on main, with no change in Settings. One pull request a month with all
+# the actions together; it is merged only with green CI and the owner's yes.
+# Without it, an action on a retired runtime shows up only when someone
+# reads the warning in a run.
 version: 2
 updates:
   - package-ecosystem: "github-actions"

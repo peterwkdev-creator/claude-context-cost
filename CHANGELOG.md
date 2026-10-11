@@ -3,6 +3,22 @@
 The version follows `claude_context_cost.__version__`; each one has a `vX.Y.Z` tag on
 the commit that released it.
 
+## 1.6.2 — 2026-10-11
+
+- A file with no responses (not a transcript, or the wrong file) prints what
+  to give instead and exits with 1, instead of an empty table.
+- A folder given as the budget file, or a file that cannot be read, is an
+  error message with exit code 2, not a traceback.
+- `--example` with a path and `--budget --quiet --json` are errors instead of
+  silently ignoring an option.
+- Clearer output: the legend says what `unattributed` is; `--versions` says
+  `tokens` is of one load; the bytes-per-token line and the `skipped` line
+  say what they mean.
+- README: a shorter start (what it is, try it in a minute); "as Claude Code
+  loads it" instead of "renders"; where a relative budget path starts.
+- Issue templates, the pull request template and CONTRIBUTING agree on where
+  a missing case goes; `claude-context-cost --version` in the templates.
+
 ## 1.6.1 — 2026-10-11
 
 - README: badges for the PyPI version, the Python versions and the license,

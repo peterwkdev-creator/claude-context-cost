@@ -134,7 +134,9 @@ def _history(top, rel):
     for h, t in commits:
         if batch is None:
             break
-        j = batch.index(b"\n", i)
+        j = batch.find(b"\n", i)
+        if j < 0:   # output cut short: keep what was read
+            break
         head = batch[i:j].split()
         i = j + 1
         if len(head) == 3 and head[1] == b"blob":

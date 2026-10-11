@@ -257,6 +257,16 @@ class TestBudgetCli(unittest.TestCase):
         with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as e:
             main(["--example", "--quiet"])
         self.assertEqual(e.exception.code, 2)
+        with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as e:
+            main(["--budget", str(self.root / "budget.toml"), str(self.root), "--quiet", "--json"])
+        self.assertEqual(e.exception.code, 2)
+
+    def test_a_folder_given_as_the_budget_file(self):
+        err = io.StringIO()
+        with redirect_stdout(io.StringIO()), redirect_stderr(err):
+            code = main(["--budget", str(self.root / "docs"), str(self.root)])
+        self.assertEqual(code, 2)
+        self.assertIn("a folder, not a budget file", err.getvalue())
 
     def test_json(self):
         code, out, _ = self.run_budget('startup = 399\n', "--json")

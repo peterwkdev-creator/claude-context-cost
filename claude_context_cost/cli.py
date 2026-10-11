@@ -31,17 +31,19 @@ def print_report(rep, top, out):
               f"{rep.total:,} input tokens over all responses\n")
     if rep.ratio_is_default:
         out.write(f"bytes per token: {rep.bytes_per_token:.2f} (default: only {rep.ratio_pairs} "
-                  f"text-only steps here, too few to calibrate)\n")
+                  f"responses here after only text entered, too few to calibrate)\n")
     else:
         out.write(f"bytes per token: {rep.bytes_per_token:.2f} (median of {rep.ratio_pairs} "
-                  f"text-only steps in this transcript)\n")
+                  f"responses in this transcript after only text entered)\n")
     if rep.bad_lines:
-        out.write(f"skipped: {plural(rep.bad_lines, 'line')} not in JSON\n")
+        out.write(f"skipped: {plural(rep.bad_lines, 'line')} not in JSON (a write cut off, for example; "
+                  f"the rest counts)\n")
     out.write("\ncost: tokens x responses it stayed in context; share: of all input tokens; "
               "entered: tokens it brought in\n"
               "in: responses it stayed in; chars/4: the usual estimate; error: chars/4 against entered "
               "(-38% = 38% too low)\n"
-              "how: measured from the usage, split by bytes, or estimated (README, \"What it counts\")\n")
+              "how: measured from the usage, split by bytes, or estimated (README, \"What it counts\")\n"
+              "unattributed: Claude Code's own system prompt and tool definitions, not your files\n")
     rows = sorted(rep.sources.values(), key=lambda s: -s.cost)
     wide = max([20] + [len(how_text(s)) for s in rows[:top]])
     out.write(f"{'cost':>12} {'share':>6} {'entered':>9} {'in':>5}  {'chars/4':>9} {'error':>6}  "
@@ -95,7 +97,8 @@ def print_versions(vs, out):
     for v in vs:
         out.write(f"{v.tokens:>9,} {v.loads:>6}  {version_text(v):<30}  {today_text(v):<14}  "
                   f"{label((v.kind, v.name))}\n")
-    out.write("\nversion: the commit with exactly this text; (later): committed only after it was loaded\n"
+    out.write("\ntokens: of one load; loads: how many times the session loaded this text\n"
+              "version: the commit with exactly this text; (later): committed only after it was loaded\n"
               "  not committed: no commit has this text; no git: the file is not in a git repository\n"
               "today: the file on disk now, as Claude Code would load it: same, +N or -N tokens (grew or "
               "shrank since), changed, or not found\n")
@@ -284,8 +287,8 @@ def main(argv=None):
     ap.add_argument("--budget", metavar="FILE",
                     help="check a repository against the limits in a TOML file: the CLAUDE.md, rules and "
                          "imports Claude Code loads from it, in estimated tokens; exit code 1 if a limit is "
-                         "exceeded, 2 if the budget file or the command line is invalid; the FILE path is "
-                         "from where you run it")
+                         "exceeded, 2 if the budget file or the command line is invalid; a relative FILE "
+                         "path starts from the current folder, not the repository")
     ap.add_argument("--quiet", action="store_true",
                     help="with --budget: print only the verdict and the limits exceeded (for a git hook)")
     ap.add_argument("--version", action="version", version=f"claude-context-cost {__version__}")
@@ -297,6 +300,8 @@ def main(argv=None):
         if a.example or a.steps or a.all or a.versions:
             ap.error("--budget cannot be combined with --example, --steps, --all or --versions "
                      "(those read a transcript; --budget reads a repository)")
+        if a.quiet and a.json:
+            ap.error("--quiet and --json cannot be combined")
         root = Path(a.path or ".").expanduser()
         if not root.is_dir():
             ap.error(f"--budget needs a repository folder: {root}")
@@ -304,6 +309,8 @@ def main(argv=None):
     if a.quiet:
         ap.error("--quiet is for --budget")
     if a.example:
+        if a.path:
+            ap.error("--example takes no path: it runs on the synthetic transcript")
         target = example_path()
     elif a.path:
         target = Path(a.path).expanduser()
@@ -312,11 +319,23 @@ def main(argv=None):
     if target.is_dir():
         if a.steps or a.versions:
             ap.error("--steps and --versions need one transcript, not a folder")
-        return print_folder(target, 10 ** 9 if a.all else TOP, out, a.json)
+        try:
+            return print_folder(target, 10 ** 9 if a.all else TOP, out, a.json)
+        except OSError as e:
+            sys.stderr.write(f"claude-context-cost: error: {e}\n")
+            return 2
     if not target.is_file():
         ap.error(f"no such file or folder: {target} (transcripts are in ~/.claude/projects/<project>/)")
-    rep = analyze(target)
-    vs = loaded_versions(target, rep.bytes_per_token) if a.versions else None
+    try:
+        rep = analyze(target)
+        vs = loaded_versions(target, rep.bytes_per_token) if a.versions else None
+    except OSError as e:
+        sys.stderr.write(f"claude-context-cost: error: {e}\n")
+        return 2
+    if not rep.responses and not vs and not a.json:
+        sys.stderr.write(f"claude-context-cost: no responses with usage in {target.name}: is it a Claude Code "
+                         f"transcript (.jsonl)? They are in ~/.claude/projects/<project>/\n")
+        return 1
     if a.json:
         data = as_json(rep)
         if vs is not None:

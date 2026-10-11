@@ -207,6 +207,8 @@ def _positive(value, what, budget_file, number=int):
 
 def load(budget_file):
     """The budget file as (bytes_per_token or None, start limit or None, {pattern: limit})."""
+    if Path(budget_file).is_dir():
+        raise BudgetError(f"{budget_file}: a folder, not a budget file")
     try:
         with open(budget_file, "rb") as fh:
             data = tomllib.load(fh)

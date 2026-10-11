@@ -7,27 +7,36 @@
 
 How much each source (your `CLAUDE.md`, rules, skills, memory, tool results)
 costs in the context of a Claude Code session, counted from the API `usage`
-recorded in its transcript, not estimated from characters.
+recorded in its transcript, not estimated from characters. For Claude Code
+users who want to know what fills their context.
+
+Try it in a minute:
+
+```bash
+pip install claude-context-cost
+claude-context-cost --example
+```
 
 ![The page counts the synthetic example, then a transcript file](https://raw.githubusercontent.com/peterwkdev-creator/claude-context-cost/main/docs/demo.gif)
 
-**[Try it in the browser](https://peterwkdev-creator.github.io/claude-context-cost/)**:
+**[Or try it in the browser](https://peterwkdev-creator.github.io/claude-context-cost/)**:
 choose one of your transcripts, or run the synthetic example. The library runs
 in the page (Pyodide); your file is never uploaded.
 
-In CI, [`--budget`](https://github.com/peterwkdev-creator/claude-context-cost#context-budget-in-ci) fails a pull request that makes a
-`CLAUDE.md`, a rule or an import grow over the limit you declared.
-[`--versions`](https://github.com/peterwkdev-creator/claude-context-cost#which-version-a-session-loaded) shows which git commit of each
-`CLAUDE.md`, rule and memory file a session loaded, and whether the file
-changed since.
-
-The usual estimate, characters / 4, **undercounts by 40 to 45%**: −45% over
-5,365 steps of the author's sessions, mostly in Portuguese, and −40% in an
-English-language session (2026-10-10). Here every response adds up to its
-`usage` exactly, in all 457 transcripts tested.
-
 > Reads only the transcripts under `~/.claude/projects` on your machine.
 > Nothing is sent anywhere. The numbers are tokens, not dollars.
+
+The usual shortcut, characters ÷ 4, **counts 40 to 45% too few tokens**
+(−45% in the author's sessions, mostly in Portuguese; −40% in one in
+English). Here the sources of every response add up exactly to the token
+total the API recorded, checked in 457 transcripts.
+
+Also: [`--budget`](https://github.com/peterwkdev-creator/claude-context-cost#context-budget-in-ci)
+fails a pull request or a commit that makes a `CLAUDE.md`, a rule or an
+import grow over the limit you set, and
+[`--versions`](https://github.com/peterwkdev-creator/claude-context-cost#which-version-a-session-loaded)
+shows which git commit of each `CLAUDE.md`, rule and memory file a session
+loaded.
 
 ## Install
 
@@ -39,7 +48,7 @@ Python 3.11 or newer, no dependencies. To install a tagged version straight
 from GitHub instead:
 
 ```bash
-pip install "git+https://github.com/peterwkdev-creator/claude-context-cost@v1.6.1"
+pip install "git+https://github.com/peterwkdev-creator/claude-context-cost@v1.6.2"
 ```
 
 ## Usage
@@ -92,7 +101,8 @@ shipped with the package (some rows left out):
   results), `prompt` (your messages), `output` (Claude's earlier answers,
   which the next request sends back), `summary` (a compaction's summary),
   `attachment` (the text Claude Code wraps around them) and `unattributed`
-  (system prompt, tool definitions, overhead).
+  (Claude Code's own system prompt and tool definitions: not from your
+  files, usually the largest row; fewer MCP servers make it smaller).
 
 From Python:
 
@@ -129,14 +139,19 @@ CLAUDE.md, rules and memory as this session loaded them: their git version, and 
       160      1  5c41635 2026-10-08 (later)      same            rule: .claude/rules/tests.md
       680      2  e8e382b 2026-10-01              not found       path rule: .claude/rules/api.md
 
+tokens: of one load; loads: how many times the session loaded this text
 version: the commit with exactly this text; (later): committed only after it was loaded
   not committed: no commit has this text; no git: the file is not in a git repository
 today: the file on disk now, as Claude Code would load it: same, +N or -N tokens (grew or shrank since), changed, or not found
 ```
 
-- **version** is the newest commit made before the load whose file renders
-  to exactly the loaded text (line endings aside). If the text was committed
-  only afterwards, it is the first such commit, marked `(later)`.
+- **tokens** are of one load; **loads** is how many times the session loaded
+  that same text (again after each compaction, for example). The main table's
+  `entered` adds up every load.
+- **version** is the newest commit made before the load whose file, as
+  Claude Code loads it (frontmatter and HTML comments removed), is exactly
+  the loaded text (line endings aside). If the text was committed only
+  afterwards, it is the first such commit, marked `(later)`.
 - **today** compares the file on disk now: `+289 tokens` means it grew by
   that much since the session loaded it.
 - Git is only read (`git log`, `git cat-file`), never written. `--json` adds
@@ -147,8 +162,8 @@ today: the file on disk now, as Claude Code would load it: same, +N or -N tokens
 
 There is no transcript in CI, so `--budget` measures the repository itself:
 every `CLAUDE.md`, rule and `@import` Claude Code would load from it, as
-Claude Code renders them (frontmatter and HTML comment blocks out), held to the
-limits you declare. It exits with 1 when a limit is exceeded, so a pull
+Claude Code loads them (frontmatter and HTML comment blocks removed), held to
+the limits you declare. It exits with 1 when a limit is exceeded, so a pull
 request that bloats the context fails.
 
 ```toml
@@ -166,8 +181,8 @@ claude-context-cost --budget context-budget.toml
 ```
 
 It measures the current folder; give another after the budget file
-(`--budget context-budget.toml path/to/repo`). The budget file's path is
-from where you run the command.
+(`--budget context-budget.toml path/to/repo`). A relative path to the budget
+file starts from the current folder, not from the repository.
 
 ```text
 context budget of my-repo: 5 instruction files, 2.25 bytes per token (default)
@@ -213,7 +228,7 @@ In a GitHub Actions workflow:
 - uses: actions/setup-python@v7
   with:
     python-version: "3.x"
-- run: pip install claude-context-cost==1.6.1
+- run: pip install claude-context-cost==1.6.2
 - run: claude-context-cost --budget context-budget.toml
 ```
 
@@ -251,7 +266,8 @@ transcript kept, and `--versions` finds that text in git.
   **measured**. When several did, the growth is **split** by their size.
 - **At the start of the session and after each compaction** the context
   jumps at once: each source is **estimated** with the bytes-per-token ratio
-  measured in the same transcript (median of its text-only steps; 2.25 when
+  measured in the same transcript (median over the responses after which
+  only text entered; 2.25 when
   it has fewer than 3), and the rest is **unattributed** (system prompt,
   tool definitions). So every response adds up to its `usage`.
 - **Rules with `paths:`** count only from the response where Claude Code
