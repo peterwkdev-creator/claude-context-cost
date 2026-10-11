@@ -13,6 +13,7 @@ from pathlib import Path
 
 from claude_context_cost import __version__, example_path
 from claude_context_cost.cli import main
+from tests.test_acceptance import make_projects
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -65,7 +66,6 @@ class TestCli(unittest.TestCase):
         self.assertEqual(rows[0]["top"]["kind"], "unattributed")
 
     def test_project_folder_ranks_sources_and_counts_subagents(self):
-        from test_acceptance import make_projects
         with tempfile.TemporaryDirectory() as tmp:
             make_projects(Path(tmp))
             code, out = run_main(str(Path(tmp) / "projA"))
@@ -78,7 +78,6 @@ class TestCli(unittest.TestCase):
         self.assertIn("(+1 subagent, 159,160 tokens)", out)
 
     def test_folder_of_projects(self):
-        from test_acceptance import make_projects
         with tempfile.TemporaryDirectory() as tmp:
             make_projects(Path(tmp))
             code, out = run_main(tmp, "--all")
