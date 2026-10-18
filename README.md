@@ -346,6 +346,19 @@ issue or pull request: it holds paths, file contents and sometimes secrets.
 Report a security problem privately, as in
 [SECURITY.md](https://github.com/peterwkdev-creator/claude-context-cost/blob/main/SECURITY.md).
 
+<!-- outros-projetos:inicio -->
+## Other projects
+
+| Project | What it does |
+|---|---|
+| [numeros-publicos](https://github.com/peterwkdev-creator/numeros-publicos) · [site](https://www.numerospublicos.com.br) | Open data on every Brazilian municipality (IBGE, National Treasury, INEP), checked against the source, one page per municipality |
+| [simples-nacional-br](https://github.com/peterwkdev-creator/simples-nacional-br) · [site](https://peterwkdev-creator.github.io/simples-nacional-br/) | Brazil's Simples Nacional tax regime checked against the law: rate, DAS, split, Fator R and CNAE |
+| [linguagem-simples-br](https://github.com/peterwkdev-creator/linguagem-simples-br) · [site](https://peterwkdev-creator.github.io/linguagem-simples-br/) | Open checker for Brazil's Plain Language Act (Law 15,263/2025): tests a text against its art. 5 |
+| [vra-anac](https://github.com/peterwkdev-creator/vra-anac) | On-time performance of Brazil's domestic flights from ANAC's VRA data |
+| [numerasheets-site](https://github.com/peterwkdev-creator/numerasheets-site) · [site](https://numerasheets.com) | Shop window for NumeraSheets: spreadsheet templates and free calculators |
+| [kerbo-releases](https://github.com/peterwkdev-creator/kerbo-releases) | Signed releases of Kerbo, a second opinion on security, network and disk for Windows |
+<!-- outros-projetos:fim -->
+
 ## License
 
 [MIT](https://github.com/peterwkdev-creator/claude-context-cost/blob/main/LICENSE)
