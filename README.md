@@ -356,7 +356,6 @@ Report a security problem privately, as in
 | [linguagem-simples-br](https://github.com/peterwkdev-creator/linguagem-simples-br) · [site](https://peterwkdev-creator.github.io/linguagem-simples-br/) | Open checker for Brazil's Plain Language Act (Law 15,263/2025): tests a text against its art. 5 |
 | [vra-anac](https://github.com/peterwkdev-creator/vra-anac) | On-time performance of Brazil's domestic flights from ANAC's VRA data |
 | [numerasheets-site](https://github.com/peterwkdev-creator/numerasheets-site) · [site](https://numerasheets.com) | Shop window for NumeraSheets: spreadsheet templates and free calculators |
-| [kerbo-releases](https://github.com/peterwkdev-creator/kerbo-releases) | Signed releases of Kerbo, a second opinion on security, network and disk for Windows |
 <!-- outros-projetos:fim -->
 
 ## License
