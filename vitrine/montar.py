@@ -11,17 +11,18 @@ Conferir = a configuração tem o que a página lê, e o adaptador, rodado aqui 
 Python normal com o exemplo de cada campo (e com cada um dos `exemplos` a
 mais), devolve o formato que a página desenha. A página nunca recebe o que este script não aprovou.
 
-Montar = `index.html` e `vitrine.json` copiados, e `pacote.zip` com o pacote
+Montar = `index.html` com título, descrição e língua da configuração gravados
+(a página sem JS mostra o projeto), `vitrine.json` copiado, e `pacote.zip` com o pacote
 (sem `__pycache__`) mais `vitrine.py` na raiz do zip. Um arquivo só para o
 navegador baixar, e o zip sai igual byte a byte da mesma árvore.
 """
 import argparse
+import html
 import importlib.util
 import json
 import shutil
 import sys
 import zipfile
-from html import escape
 from pathlib import Path
 
 AQUI = Path(__file__).resolve().parent
@@ -42,6 +43,10 @@ def conferir_config(cfg):
         erros.append(f"falta a chave {k!r}")
     for k in sorted(cfg.keys() - OBRIGATORIAS - OPCIONAIS):
         erros.append(f"chave desconhecida {k!r}")
+    # gravados no HTML pelo montar: vazio ou não texto quebraria a página
+    for k in ("titulo", "descricao", "lang"):
+        if k in cfg and (not isinstance(cfg[k], str) or not cfg[k].strip()):
+            erros.append(f"{k!r} precisa ser texto não vazio")
     campos = cfg.get("campos")
     if not isinstance(campos, list) or not campos:
         return erros + ["'campos' precisa ser lista com ao menos um campo"]
@@ -215,19 +220,24 @@ def arquivos_do_pacote(raiz, pacote):
 
 
 SAIDA = {"index.html", "vitrine.json", "pacote.zip"}
+TITULO = "<title>Vitrine</title>"
+LANG = '<html lang="pt-BR">'
 
 
-def pagina(html, cfg):
-    """index.html com idioma, título e descrição da configuração já no HTML: leitor
-    de tela e buscador leem antes de o script rodar (ou sem ele)."""
-    trocas = ((b'<html lang="pt-BR">', f'<html lang="{escape(cfg.get("lang", "pt-BR"))}">'),
-              (b"<title>Vitrine</title>", f'<title>{escape(cfg["titulo"])}</title>\n'
-                                          f'<meta name="description" content="{escape(cfg["descricao"])}">'))
-    for velho, novo in trocas:
-        if html.count(velho) != 1:
-            raise SystemExit(f"vitrine: index.html sem {velho.decode()}")
-        html = html.replace(velho, novo.encode("utf-8"))
-    return html
+def pagina(raiz, cfg):
+    """O index.html com título, descrição e língua gravados: a prévia de link
+    e o indexador sem JS liam "Vitrine" e nenhuma frase do projeto."""
+    texto = (raiz / "vitrine" / "index.html").read_bytes().decode("utf-8")
+    for marca in (TITULO, LANG):
+        if texto.count(marca) != 1:
+            raise SystemExit(f"vitrine: index.html sem {marca!r} uma vez só; recusado")
+    titulo = html.escape(cfg["titulo"])
+    descricao = html.escape(cfg["descricao"], quote=True)
+    fim = "\r\n" if "\r\n" in texto else "\n"
+    texto = texto.replace(TITULO, f'<title>{titulo}</title>{fim}<meta name="description" content="{descricao}">')
+    # o mesmo padrão do JS (cfg.lang || "pt-BR")
+    texto = texto.replace(LANG, f'<html lang="{html.escape(cfg.get("lang") or "pt-BR", quote=True)}">')
+    return texto.encode("utf-8")
 
 
 def montar(raiz, saida):
@@ -238,9 +248,10 @@ def montar(raiz, saida):
         alheios = sorted(p.name for p in saida.iterdir() if p.name not in SAIDA)
         if alheios:
             raise SystemExit(f"vitrine: {saida} tem o que o montar não escreveu ({', '.join(alheios[:5])}); recusado")
+    indice = pagina(raiz, cfg)  # antes do mkdir: recusada, não deixa pasta vazia
     saida.mkdir(parents=True, exist_ok=True)
+    (saida / "index.html").write_bytes(indice)
     shutil.copyfile(raiz / "vitrine" / "vitrine.json", saida / "vitrine.json")
-    (saida / "index.html").write_bytes(pagina((raiz / "vitrine" / "index.html").read_bytes(), cfg))
     entradas = [(p, p.relative_to(raiz).as_posix()) for p in arquivos_do_pacote(raiz, cfg["pacote"])]
     entradas.append((raiz / "vitrine" / "vitrine.py", "vitrine.py"))
     with zipfile.ZipFile(saida / "pacote.zip", "w", zipfile.ZIP_DEFLATED) as z:
