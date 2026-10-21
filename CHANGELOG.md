@@ -3,7 +3,7 @@
 The version follows `claude_context_cost.__version__`; each one has a `vX.Y.Z` tag on
 the commit that released it.
 
-## 1.6.4 — unreleased
+## 1.6.4 — 2026-10-21
 
 - The demo page build also rejects an empty or non-text title, description
   or language, builds the page before creating the output folder, and keeps
