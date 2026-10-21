@@ -355,6 +355,9 @@ Report a security problem privately, as in
 | [simples-nacional-br](https://github.com/peterwkdev-creator/simples-nacional-br) · [site](https://peterwkdev-creator.github.io/simples-nacional-br/) | Brazil's Simples Nacional tax regime checked against the law: rate, DAS, split, Fator R and CNAE |
 | [linguagem-simples-br](https://github.com/peterwkdev-creator/linguagem-simples-br) · [site](https://peterwkdev-creator.github.io/linguagem-simples-br/) | Open checker for Brazil's Plain Language Act (Law 15,263/2025): tests a text against its art. 5 |
 | [vra-anac](https://github.com/peterwkdev-creator/vra-anac) | On-time performance of Brazil's domestic flights from ANAC's VRA data |
+| [tts-ptbr](https://github.com/peterwkdev-creator/tts-ptbr) | Brazilian Portuguese text-to-speech with open models (Kokoro and Piper), measured by Whisper |
+| [carrossel-terminal](https://github.com/peterwkdev-creator/carrossel-terminal) | Terminal-style Instagram carousel: Markdown becomes PNG, checked before posting, and the post becomes a Reel |
+| [ia-testada](https://github.com/peterwkdev-creator/ia-testada) | The measurements behind the @peterwk.dev posts, with the script and how to redo them |
 | [numerasheets-site](https://github.com/peterwkdev-creator/numerasheets-site) · [site](https://numerasheets.com) | Shop window for NumeraSheets: spreadsheet templates and free calculators |
 <!-- outros-projetos:fim -->
 
