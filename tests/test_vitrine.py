@@ -1,8 +1,8 @@
-"""Vitrine: a configuração, o adaptador e o que o montar leva ao navegador.
+"""Showcase: the configuration, the adapter and what montar takes to the browser.
 
-Mora em `tests/` da
-biblioteca. Roda no gancho com os outros testes: se o adaptador deixar de
-devolver o formato que a página desenha, o commit para aqui, não no navegador.
+Lives in `tests/` of the
+library. Runs in the hook with the other tests: if the adapter stops
+returning the format the page draws, the commit stops here, not in the browser.
 """
 import importlib.util
 import json
@@ -31,8 +31,8 @@ def _valido():
 
 
 def _com_campo(c, tipo):
-    """Nome de um campo do tipo pedido na configuração c, criando um se não houver
-    (uma vitrine pode ter só campo de arquivo; outra, só de texto)."""
+    """Name of a field of the requested type in configuration c, creating one if there is none
+    (a showcase may have only a file field; another, only text)."""
     for campo in c["campos"]:
         if (campo["tipo"] == "arquivo") == (tipo == "arquivo"):
             return campo["nome"]
@@ -58,10 +58,10 @@ class Projeto(unittest.TestCase):
         self.assertEqual(montar.conferir_resultado(res, entradas, CFG.get("campo_marcado")), [])
 
     def test_posicao_conta_ponto_de_codigo(self):
-        # Emoji e acento antes do trecho: a página conta como o Python.
+        # Emoji and accent before the span: the page counts like Python.
         campo = CFG.get("campo_marcado")
         if campo is None:
-            self.skipTest("sem campo_marcado")
+            self.skipTest("no campo_marcado")
         entradas = {c["nome"]: c["exemplo"] for c in CFG["campos"]}
         entradas[campo] = "🙂 Ação. " + entradas[campo]
         res = montar.carregar_adaptador(RAIZ).executar(entradas)
@@ -94,7 +94,7 @@ class Projeto(unittest.TestCase):
             montar.montar(RAIZ, Path(tmp) / "site")
 
     def test_cache_do_python_fica_de_fora(self):
-        # Cópia da raiz com cache plantado: a árvore real pode não ter cache.
+        # Copy of the root with a planted cache: the real tree may have no cache.
         with tempfile.TemporaryDirectory() as tmp:
             copia = Path(tmp) / "raiz"
             for pasta in ("vitrine", CFG["pacote"]):
@@ -108,7 +108,7 @@ class Projeto(unittest.TestCase):
             self.assertFalse([n for n in nomes if "__pycache__" in n or n.endswith(".pyc")], nomes)
 
     def test_ordem_do_zip_com_caixa_como_no_linux(self):
-        # Maiúscula antes de minúscula, como o Linux do CI ordena; o Path do Windows não
+        # Uppercase before lowercase, as the CI's Linux sorts; Windows Path does not
         with tempfile.TemporaryDirectory() as tmp:
             copia = Path(tmp) / "raiz"
             for pasta in ("vitrine", CFG["pacote"]):
@@ -116,23 +116,23 @@ class Projeto(unittest.TestCase):
                                 ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
             (copia / CFG["pacote"] / "a_plantado.txt").write_text("a", encoding="utf-8")
             (copia / CFG["pacote"] / "B_plantado.txt").write_text("b", encoding="utf-8")
-            nomes = montar.montar(copia, Path(tmp) / "site")[:-1]  # o último é o vitrine.py
+            nomes = montar.montar(copia, Path(tmp) / "site")[:-1]  # the last one is vitrine.py
             self.assertEqual(nomes, sorted(nomes))
 
     def test_zip_sem_data_da_montagem(self):
-        # Mesma árvore, mesmo zip: nenhuma entrada leva a hora da montagem.
+        # Same tree, same zip: no entry carries the build time.
         with tempfile.TemporaryDirectory() as tmp:
             montar.montar(RAIZ, Path(tmp) / "site")
             with zipfile.ZipFile(Path(tmp) / "site" / "pacote.zip") as z:
                 datas = {i.date_time for i in z.infolist()}
                 sistemas = {(i.create_system, i.external_attr) for i in z.infolist()}
             self.assertEqual(datas, {(2020, 1, 1, 0, 0, 0)})
-            # nem o sistema que montou (0 no Windows, 3 no Linux)
+            # nor the system that built it (0 on Windows, 3 on Linux)
             self.assertEqual(sistemas, {(3, 0o644 << 16)})
 
     def test_pagina_sem_js_mostra_o_projeto(self):
-        # Prévia de link e indexador não rodam JS: título, descrição e língua
-        # saem gravados no HTML, com escape.
+        # Link previews and indexers do not run JS: title, description and language
+        # come baked into the HTML, escaped.
         cfg = json.loads((RAIZ / "vitrine" / "vitrine.json").read_text(encoding="utf-8"))
         cfg = {**cfg, "titulo": 'A <b> & "c"', "descricao": 'D "e" <f>', "lang": "en"}
         texto = montar.pagina(RAIZ, cfg).decode("utf-8")
@@ -142,7 +142,7 @@ class Projeto(unittest.TestCase):
         self.assertNotIn("<title>Vitrine</title>", texto)
 
     def test_montar_grava_a_pagina(self):
-        # O index.html que sai do montar é o da pagina(), não a cópia do modelo.
+        # The index.html that montar produces is the one from pagina(), not the template's copy.
         cfg = json.loads((RAIZ / "vitrine" / "vitrine.json").read_text(encoding="utf-8"))
         with tempfile.TemporaryDirectory() as tmp:
             montar.montar(RAIZ, Path(tmp) / "site")
@@ -160,7 +160,7 @@ class Projeto(unittest.TestCase):
 
 
 class Contrato(unittest.TestCase):
-    """Duas provas do conferidor: aceita o válido, pega cada defeito plantado."""
+    """Two proofs for the checker: it accepts the valid, it catches each planted defect."""
 
     def erros(self, res, texto="abcdef"):
         return montar.conferir_resultado(res, {"t": texto}, "t")
@@ -170,20 +170,20 @@ class Contrato(unittest.TestCase):
 
     def test_defeitos_plantados(self):
         casos = {
-            "sem resumo": lambda r: r.pop("resumo"),
-            "fim além do texto": lambda r: r["marcas"][0].update(fim=7),
-            "inicio igual ao fim": lambda r: r["marcas"][0].update(inicio=3),
-            "posição em texto": lambda r: r["marcas"][0].update(inicio="0"),
-            "posição booleana": lambda r: r["marcas"][0].update(inicio=False),
-            "rótulo vazio": lambda r: r["marcas"][0].update(rotulo=""),
-            "chave errada": lambda r: r.update(marca=[]),
-            "chave errada na marca": lambda r: r["marcas"][0].update(cor="x"),
-            "linha curta": lambda r: r["tabela"]["linhas"].append(["só uma"]),
-            "célula objeto": lambda r: r["tabela"]["linhas"].append([{}, 1]),
-            "sem colunas": lambda r: r["tabela"].pop("colunas"),
-            "não vira JSON": lambda r: r.update(aviso={1}),
-            "célula NaN": lambda r: r["tabela"]["linhas"].append(["1", float("nan")]),
-            "célula infinita": lambda r: r["tabela"]["linhas"].append(["1", float("inf")]),
+            "no resumo": lambda r: r.pop("resumo"),
+            "fim beyond the text": lambda r: r["marcas"][0].update(fim=7),
+            "inicio equal to fim": lambda r: r["marcas"][0].update(inicio=3),
+            "position as text": lambda r: r["marcas"][0].update(inicio="0"),
+            "boolean position": lambda r: r["marcas"][0].update(inicio=False),
+            "empty rotulo": lambda r: r["marcas"][0].update(rotulo=""),
+            "wrong key": lambda r: r.update(marca=[]),
+            "wrong key in the mark": lambda r: r["marcas"][0].update(cor="x"),
+            "short row": lambda r: r["tabela"]["linhas"].append(["só uma"]),
+            "object cell": lambda r: r["tabela"]["linhas"].append([{}, 1]),
+            "no colunas": lambda r: r["tabela"].pop("colunas"),
+            "does not become JSON": lambda r: r.update(aviso={1}),
+            "NaN cell": lambda r: r["tabela"]["linhas"].append(["1", float("nan")]),
+            "infinite cell": lambda r: r["tabela"]["linhas"].append(["1", float("inf")]),
         }
         for nome, estragar in casos.items():
             with self.subTest(nome):
@@ -196,34 +196,34 @@ class Contrato(unittest.TestCase):
 
     def test_config_plantada(self):
         casos = {
-            "tipo desconhecido": lambda c: c["campos"][0].update(tipo="numero"),
-            "sem exemplo": lambda c: c["campos"][0].pop("exemplo"),
-            "campo marcado inexistente": lambda c: c.update(campo_marcado="outro"),
-            "chave errada": lambda c: c.update(titlo="x"),
-            "título vazio": lambda c: c.update(titulo=" "),
-            "descrição não texto": lambda c: c.update(descricao=3),
-            "lang vazio": lambda c: c.update(lang=""),
-            "chave de campo errada": lambda c: c["campos"][0].update(rotlo="x"),
-            # o 1º campo pode ser de arquivo, e aí o aceita vale
-            "aceita fora de arquivo": lambda c: c["campos"][0].update(tipo="textarea", aceita=".txt"),
-            "repositório sem https": lambda c: c.update(repositorio="github.com/x"),
-            "pacote como caminho": lambda c: c.update(pacote="../outro"),
-            "campos vazio": lambda c: c.update(campos=[]),
+            "unknown tipo": lambda c: c["campos"][0].update(tipo="numero"),
+            "no exemplo": lambda c: c["campos"][0].pop("exemplo"),
+            "nonexistent campo_marcado": lambda c: c.update(campo_marcado="outro"),
+            "wrong key": lambda c: c.update(titlo="x"),
+            "empty titulo": lambda c: c.update(titulo=" "),
+            "descricao not text": lambda c: c.update(descricao=3),
+            "empty lang": lambda c: c.update(lang=""),
+            "wrong field key": lambda c: c["campos"][0].update(rotlo="x"),
+            # the 1st field may be a file field, and then aceita is valid
+            "aceita outside a file field": lambda c: c["campos"][0].update(tipo="textarea", aceita=".txt"),
+            "repositorio without https": lambda c: c.update(repositorio="github.com/x"),
+            "pacote as a path": lambda c: c.update(pacote="../outro"),
+            "empty campos": lambda c: c.update(campos=[]),
             "link javascript:": lambda c: c.update(links=[{"texto": "x", "href": "javascript:alert(1)"}]),
             "link http": lambda c: c.update(links=[{"texto": "x", "href": "http://exemplo.com"}]),
-            "link sem texto": lambda c: c.update(links=[{"href": "https://exemplo.com"}]),
-            "link com chave errada": lambda c: c.update(links=[{"texto": "x", "href": "https://e.com", "url": "x"}]),
-            "links fora de lista": lambda c: c.update(links={"texto": "x"}),
-            "exemplos fora de lista": lambda c: c.update(exemplos={"rotulo": "x"}),
-            "exemplo sem rótulo": lambda c: c.update(exemplos=[{"valores": {_com_texto(c): "x"}}]),
-            "exemplo sem valores": lambda c: c.update(exemplos=[{"rotulo": "x", "valores": {}}]),
-            "exemplo com chave errada": lambda c: c.update(
+            "link without texto": lambda c: c.update(links=[{"href": "https://exemplo.com"}]),
+            "link with wrong key": lambda c: c.update(links=[{"texto": "x", "href": "https://e.com", "url": "x"}]),
+            "links not a list": lambda c: c.update(links={"texto": "x"}),
+            "exemplos not a list": lambda c: c.update(exemplos={"rotulo": "x"}),
+            "exemplo without rotulo": lambda c: c.update(exemplos=[{"valores": {_com_texto(c): "x"}}]),
+            "exemplo without valores": lambda c: c.update(exemplos=[{"rotulo": "x", "valores": {}}]),
+            "exemplo with wrong key": lambda c: c.update(
                 exemplos=[{"rotulo": "x", "valores": {_com_texto(c): "x"}, "valor": "x"}]),
-            "exemplo de campo inexistente": lambda c: c.update(
+            "exemplo of nonexistent field": lambda c: c.update(
                 exemplos=[{"rotulo": "x", "valores": {"inexistente": "x"}}]),
-            "exemplo de campo de arquivo": lambda c: c.update(
+            "exemplo of file field": lambda c: c.update(
                 exemplos=[{"rotulo": "x", "valores": {_com_arquivo(c): "x"}}]),
-            "exemplo com valor número": lambda c: c.update(
+            "exemplo with numeric value": lambda c: c.update(
                 exemplos=[{"rotulo": "x", "valores": {_com_texto(c): 1}}]),
         }
         for nome, estragar in casos.items():
@@ -248,7 +248,7 @@ class Contrato(unittest.TestCase):
         self.assertEqual(montar.conferir_config(c), [])
 
     def test_conferir_roda_cada_exemplo(self):
-        # O adaptador recebe o padrão e, depois, cada exemplo por cima dele.
+        # The adapter receives the default and, then, each example on top of it.
         c = json.loads(json.dumps(CFG))
         nome = _com_texto(c)
         c["exemplos"] = [{"rotulo": "outro", "valores": {nome: "outro"}}]
