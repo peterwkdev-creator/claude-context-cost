@@ -3,6 +3,14 @@
 The version follows `claude_context_cost.__version__`; each one has a `vX.Y.Z` tag on
 the commit that released it.
 
+## 1.6.4 — unreleased
+
+- The demo page build also rejects an empty or non-text title, description
+  or language, builds the page before creating the output folder, and keeps
+  CRLF line endings in the HTML.
+- The Pages workflow jobs stop after 10 minutes.
+- No change in the library.
+
 ## 1.6.3 — 2026-10-11
 
 - The demo page is built with its language (English), title and description
