@@ -3,7 +3,7 @@
 The version follows `claude_context_cost.__version__`; each one has a `vX.Y.Z` tag on
 the commit that released it.
 
-## 1.7.0 — unreleased
+## 1.7.0 — 2026-10-23
 
 - A folder sum counts each response once: a resumed or forked session
   repeats the responses it came from in its own file, and those were counted
