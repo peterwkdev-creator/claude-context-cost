@@ -187,9 +187,14 @@ class TestSubagentTranscript(unittest.TestCase):
 
 
 def make_projects(root):
-    """projA: two sessions and a subagent of s1; projB: one session. Each is the example."""
+    """projA: two sessions and a subagent of s1; projB: one session.
+
+    Each is the example, with message ids of its own: two sessions never share
+    a response (a resumed one does, see TestResumedSession).
+    """
     import json
     import os
+    import re
     text = example_path().read_text(encoding="utf-8")
     side = "\n".join(json.dumps({**json.loads(x), "isSidechain": True}) if x.startswith('{"') else x
                      for x in text.splitlines())
@@ -198,7 +203,7 @@ def make_projects(root):
     for n, (name, body) in enumerate(files):
         f = root / name
         f.parent.mkdir(parents=True, exist_ok=True)
-        f.write_text(body, encoding="utf-8")
+        f.write_text(re.sub(r'("id": ?"msg_)', rf"\g<1>f{n}_", body), encoding="utf-8")
         os.utime(f, (1_000_000 + n, 1_000_000 + n))   # s2 older than s1
 
 
@@ -246,6 +251,169 @@ class TestSummary(unittest.TestCase):
         empty.mkdir()
         s = summarize(empty)
         self.assertEqual((s.projects, s.rows, s.total), ([], [], 0))
+
+
+def assistant(usage, mid=None, **line):
+    m = {"model": "claude-test", "content": [{"type": "text", "text": "ok"}], "usage": usage}
+    if mid:
+        m["id"] = mid
+    return {"type": "assistant", "cwd": "/home/dev/demo", **line, "message": m}
+
+
+def usage(context, output=5):
+    return {"input_tokens": context, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0,
+            "output_tokens": output}
+
+
+def write_lines(path, lines, tail=""):
+    import json
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("".join(json.dumps(x) + "\n" for x in lines) + tail, encoding="utf-8")
+    return path
+
+
+class TestResumedSession(unittest.TestCase):
+    """A resumed or forked session repeats the responses it came from: a sum counts each once."""
+
+    M7_OUTPUT = 20   # msg_07's output_tokens in the example
+
+    def setUp(self):
+        import tempfile
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.proj = Path(tmp.name) / "proj"
+        self.proj.mkdir()
+        self.text = example_path().read_text(encoding="utf-8")
+
+    def write(self, name, body, when):
+        import os
+        f = self.proj / name
+        f.write_text(body, encoding="utf-8")
+        os.utime(f, (when, when))
+
+    def test_a_fork_with_no_new_response_counts_once(self):
+        from claude_context_cost import summarize
+        self.write("s1.jsonl", self.text, 1_000_000)
+        self.write("s1-fork.jsonl", self.text, 1_000_001)
+        s = summarize(self.proj)
+        self.assertEqual([(r.file, r.responses, r.repeated) for r in s.rows],
+                         [("s1.jsonl", 7, 0), ("s1-fork.jsonl", 0, 7)])
+        self.assertEqual((s.total, s.responses), (159160, 7))
+        self.assertEqual({k[:2]: t.cost for k, t in s.sources.items()}, EXPECTED_COST)
+        self.assertEqual(s.rows[1].top, None)
+
+    def test_a_resumed_session_adds_only_its_new_responses(self):
+        import json
+        from claude_context_cost import summarize
+        context = CONTEXTS[-1] + self.M7_OUTPUT + 500    # only the new prompt entered: 500 tokens
+        new = [{"type": "user", "cwd": "/home/dev/demo", "message": {"role": "user", "content": "go on"}},
+               assistant(usage(context), "msg_08")]
+        self.write("s1.jsonl", self.text, 1_000_000)
+        self.write("s1-resumed.jsonl", self.text + "".join(json.dumps(x) + "\n" for x in new), 1_000_001)
+        s = summarize(self.proj)
+        self.assertEqual([(r.file, r.responses, r.repeated, r.total) for r in s.rows],
+                         [("s1.jsonl", 7, 0, 159160), ("s1-resumed.jsonl", 1, 7, context)])
+        last = {**EXPECTED_LEDGERS[-1], OUTPUT: 30 + self.M7_OUTPUT, PROMPT: 100 + 500}
+        cost = {k: EXPECTED_COST.get(k, 0) + last.get(k, 0) for k in set(EXPECTED_COST) | set(last)}
+        entered = {**EXPECTED_ENTERED, OUTPUT: EXPECTED_ENTERED[OUTPUT] + self.M7_OUTPUT,
+                   PROMPT: EXPECTED_ENTERED[PROMPT] + 500}
+        self.assertEqual({k[:2]: t.cost for k, t in s.sources.items()}, cost)
+        self.assertEqual({k[:2]: t.entered for k, t in s.sources.items()}, entered)
+        self.assertEqual({k[:2]: t.transcripts for k, t in s.sources.items()},
+                         {k: 2 if k in last else 1 for k in cost})
+        self.assertEqual((s.rows[1].top.kind, s.rows[1].top.cost), ("unattributed", 18320))
+
+    def test_ids_made_from_line_numbers_are_not_shared_between_files(self):
+        from claude_context_cost import summarize
+        for n, name in enumerate(["a.jsonl", "b.jsonl"]):
+            write_lines(self.proj / name, [assistant(usage(1000 + n))])
+        s = summarize(self.proj)
+        self.assertEqual((s.responses, s.total), (2, 2001))
+
+
+class TestRobustness(unittest.TestCase):
+    """Damaged, empty or unknown transcripts: count what can be counted, and say what cannot."""
+
+    def setUp(self):
+        import tempfile
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.dir = Path(tmp.name)
+
+    def analyze_quiet(self, path):
+        import io
+        from contextlib import redirect_stderr
+        err = io.StringIO()
+        with redirect_stderr(err):
+            rep = analyze(path)
+        return rep, err.getvalue()
+
+    def test_responses_without_message_id_each_count(self):
+        lines = [assistant(usage(1000), uuid="u1"), assistant(usage(1100), uuid="u2"),
+                 assistant(usage(1200))]
+        rep, _ = self.analyze_quiet(write_lines(self.dir / "t.jsonl", lines))
+        self.assertEqual([r.context for r in rep.responses], [1000, 1100, 1200])
+        self.assertEqual([r.id for r in rep.responses], ["u1", "u2", "line 3"])
+
+    def test_blocks_of_one_response_without_message_id_share_its_request_id(self):
+        lines = [assistant(usage(1000), requestId="req_1", uuid="u1"),
+                 assistant(usage(1000), requestId="req_1", uuid="u2"),
+                 assistant(usage(1300), requestId="req_2", uuid="u3")]
+        rep, _ = self.analyze_quiet(write_lines(self.dir / "t.jsonl", lines))
+        self.assertEqual([(r.id, r.context) for r in rep.responses], [("req_1", 1000), ("req_2", 1300)])
+
+    def test_a_known_transcript_gives_no_warning(self):
+        rep, err = self.analyze_quiet(example_path())
+        self.assertEqual((len(rep.responses), err), (7, ""))
+
+    def test_lines_with_no_type_are_an_unknown_format(self):
+        f = write_lines(self.dir / "notes.jsonl", [{"kind": "assistant", "usage": usage(1000)}] * 2)
+        rep, err = self.analyze_quiet(f)
+        self.assertEqual(rep.responses, [])
+        self.assertIn("warning: notes.jsonl: 2 JSON lines and none has a \"type\"", err)
+
+    def test_assistant_lines_with_no_input_tokens_are_an_unknown_format(self):
+        renamed = {"prompt_tokens": 1000, "completion_tokens": 5}
+        f = write_lines(self.dir / "t.jsonl", [assistant(renamed, "m1"), assistant({}, "m2")])
+        rep, err = self.analyze_quiet(f)
+        self.assertEqual(rep.responses, [])
+        self.assertIn("warning: t.jsonl: 2 assistant lines and none has \"message.usage.input_tokens\"", err)
+
+    def test_a_truncated_last_line_is_skipped_and_the_rest_counts(self):
+        whole = analyze(example_path())
+        f = self.dir / "cut.jsonl"
+        last = '{"type":"assistant","message":{"id":"msg_09","usage":{"input_tokens":5'
+        f.write_text(example_path().read_text(encoding="utf-8") + last, encoding="utf-8")
+        rep, err = self.analyze_quiet(f)
+        self.assertEqual(rep.bad_lines, whole.bad_lines + 1)
+        self.assertEqual([r.ledger for r in rep.responses], EXPECTED_LEDGERS)
+        self.assertEqual(err, "")
+
+    def test_an_empty_file_has_no_responses(self):
+        for body in ("", "\n\n"):
+            f = self.dir / "empty.jsonl"
+            f.write_text(body, encoding="utf-8")
+            rep, err = self.analyze_quiet(f)
+            self.assertEqual((rep.responses, rep.total, rep.compactions, err), ([], 0, 0, ""))
+
+    def test_bytes_that_are_not_utf8_do_not_stop_the_count(self):
+        raw = example_path().read_bytes()
+        raw = raw.replace(b"please please", b"please \xff\xfe please", 1)   # inside the first prompt
+        f = self.dir / "bytes.jsonl"
+        f.write_bytes(b"\xff\xfe\x00garbage\n" + raw)
+        rep, _ = self.analyze_quiet(f)
+        self.assertEqual(rep.bad_lines, analyze(example_path()).bad_lines + 1)
+        self.assertEqual([r.id for r in rep.responses], [f"msg_0{i}" for i in range(1, 8)])
+        self.assertEqual(rep.total, 159160)
+
+    def test_fields_of_the_wrong_type_are_not_fatal(self):
+        lines = [{"type": "assistant", "message": "text"}, {"type": "assistant", "message": {"usage": [1]}},
+                 {"type": "user", "message": "text"}, {"type": "attachment", "rendered": "x", "attachment": "y"},
+                 {"type": "assistant", "cwd": 3, "message": {"id": "m1", "content": "text",
+                                                            "usage": {"input_tokens": "9", "output_tokens": None,
+                                                                      "cache_read_input_tokens": 100}}}]
+        rep, _ = self.analyze_quiet(write_lines(self.dir / "t.jsonl", lines))
+        self.assertEqual([(r.id, r.context, r.output) for r in rep.responses], [("m1", 100, 0)])
 
 
 if __name__ == "__main__":

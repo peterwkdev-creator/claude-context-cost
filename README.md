@@ -48,7 +48,7 @@ Python 3.11 or newer, no dependencies. To install a tagged version straight
 from GitHub instead:
 
 ```bash
-pip install "git+https://github.com/peterwkdev-creator/claude-context-cost@v1.6.4"
+pip install "git+https://github.com/peterwkdev-creator/claude-context-cost@v1.7.0"
 ```
 
 ## Usage
@@ -69,7 +69,8 @@ Pass a project's folder instead of a file to sum its sessions and their
 subagents: the costliest sources first, then one line per session. Pass
 `~/.claude/projects` itself to sum every project. Tools and your own
 `~/.claude/...` files add up across projects; a project's `CLAUDE.md` and
-rules stay apart, marked with the project.
+rules stay apart, marked with the project. A resumed or forked session
+repeats the responses it came from in its own file: each is counted once.
 
 `--steps` shows what entered before each response, `--all` lists every
 source, `--json` is for scripts (for a folder too). On the synthetic example
@@ -157,6 +158,9 @@ today: the file on disk now, as Claude Code would load it: same, +N or -N tokens
 - Git is only read (`git log`, `git cat-file`), never written. `--json` adds
   the list under `"versions"` (the top-level `"version"` is the tool's own);
   from Python, `loaded_versions(transcript)`.
+- Run `--versions` only on your own transcripts: it runs git in the folders
+  the transcript names. Git runs there with `core.fsmonitor` off, and only
+  absolute local paths are looked up (not relative or `//host/share` ones).
 
 ## Context budget in CI
 
@@ -220,7 +224,8 @@ over budget: 2 limits exceeded
 - **An invalid budget exits with 2**, never passes: a typo in a key, a limit
   that is not a positive integer, a pattern that matches no file (it would
   leave a file without its limit), a missing budget file, or a wrong command
-  line. An import that resolves outside the repository is listed, not counted.
+  line. An import that resolves outside the repository, or a rule that is a
+  link to a file outside it, is listed, not counted.
 
 In a GitHub Actions workflow:
 
@@ -228,7 +233,7 @@ In a GitHub Actions workflow:
 - uses: actions/setup-python@v7
   with:
     python-version: "3.x"
-- run: pip install claude-context-cost==1.6.4
+- run: pip install claude-context-cost==1.7.0
 - run: claude-context-cost --budget context-budget.toml
 ```
 

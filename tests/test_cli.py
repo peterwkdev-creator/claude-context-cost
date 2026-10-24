@@ -120,6 +120,24 @@ class TestCli(unittest.TestCase):
         self.assertEqual([(p["name"], p["transcripts"], p["subagents"]) for p in data["projects"]],
                          [("projA", 2, 1), ("projB", 1, 0)])
         self.assertEqual([r["session"] for r in data["subagents"]], ["s1"])
+        self.assertEqual([p["total"] for p in data["projects"]], [3 * 159160, 159160])
+        self.assertNotIn("repeated", js)
+
+    def test_a_forked_session_says_its_responses_were_counted_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for n, name in enumerate(["s1.jsonl", "s1-fork.jsonl"]):
+                f = Path(tmp) / name
+                shutil.copyfile(example_path(), f)
+                os.utime(f, (1_000_000 + n, 1_000_000 + n))
+            code, out = run_main(tmp)
+            _, js = run_main(tmp, "--json")
+        self.assertEqual(code, 0)
+        self.assertIn("7 responses, 159,160 input tokens", out)
+        self.assertIn("s1-fork.jsonl      0 responses              0 tokens    "
+                      "(7 responses already counted in another transcript)", out)
+        data = json.loads(js)
+        self.assertEqual([(r["file"], r["responses"], r.get("repeated")) for r in data["transcripts"]],
+                         [("s1.jsonl", 7, None), ("s1-fork.jsonl", 0, 7)])
 
     def test_folder_refuses_per_transcript_options(self):
         with tempfile.TemporaryDirectory() as tmp, redirect_stdout(io.StringIO()):

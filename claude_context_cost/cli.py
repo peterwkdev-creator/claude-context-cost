@@ -126,18 +126,28 @@ def plural(n, word):
     return f"{n:,} {word}" + ("" if n == 1 else "s")
 
 
+def project_totals(s):
+    """Per project: its transcripts, subagents, responses and tokens, in one pass over the rows."""
+    by = {p: {"name": p, "transcripts": 0, "subagents": 0, "responses": 0, "total": 0} for p in s.projects}
+    for r in s.rows:
+        d = by[r.project]
+        d["subagents" if r.session else "transcripts"] += 1
+        d["responses"] += r.responses
+        d["total"] += r.total
+    return list(by.values())
+
+
 def folder_json(s):
     def row(r):
         top = {"kind": r.top.kind, "name": r.top.name, "cost": r.top.cost} if r.top else None
         d = {"file": r.file, "project": r.project, "responses": r.responses, "compactions": r.compactions,
              "total": r.total, "top": top}
+        if r.repeated:
+            d["repeated"] = r.repeated
         return {**d, "session": r.session} if r.session else d
     return {
         "folder": Path(s.path).name, "version": __version__, "responses": s.responses, "total": s.total,
-        "projects": [{"name": p, "transcripts": sum(1 for r in s.rows if r.project == p and not r.session),
-                      "subagents": sum(1 for r in s.rows if r.project == p and r.session),
-                      "responses": sum(r.responses for r in s.rows if r.project == p),
-                      "total": sum(r.total for r in s.rows if r.project == p)} for p in s.projects],
+        "projects": project_totals(s),
         "transcripts": [row(r) for r in s.rows if not r.session],
         "subagents": [row(r) for r in s.rows if r.session],
         "sources": [{"kind": t.kind, "name": t.name, "project": t.project, "cost": t.cost, "entered": t.entered,
@@ -180,18 +190,25 @@ def print_folder(folder, top, out, as_json_output=False):
         out.write(f"{rest:>14,} {rest / total:>6.1%}  ... {len(rows) - top} more sources (--all)\n")
     if many:
         out.write("\nprojects, costliest first; run on a project's folder for its transcripts\n")
-        for p in sorted(folder_json(s)["projects"], key=lambda p: -p["total"]):
+        for p in sorted(project_totals(s), key=lambda p: -p["total"]):
             out.write(f"  {p['name']}  {plural(p['transcripts'], 'transcript')}, "
                       f"{plural(p['subagents'], 'subagent')}, {p['responses']:>7,} responses  "
                       f"{p['total']:>15,} tokens\n")
         return 0
     out.write("\ntranscripts, oldest first; run on one file for the detail\n")
+    subagents = {}
+    for x in s.rows:
+        if x.session:
+            subagents.setdefault(x.session, []).append(x)
     for r in sessions:
         top_txt = f"top: {label((r.top.kind, r.top.name))} {r.top.cost / (r.total or 1):.0%}" if r.top else ""
-        subs = [x for x in s.rows if x.session == Path(r.file).stem]
+        subs = subagents.get(Path(r.file).stem, [])
         sub_txt = (f"  (+{plural(len(subs), 'subagent')}, {sum(x.total for x in subs):,} tokens)"
                    if subs else "")
-        out.write(f"  {r.file}  {r.responses:>5} responses  {r.total:>13,} tokens  {top_txt}{sub_txt}\n")
+        rep_txt = (f"  ({plural(r.repeated, 'response')} already counted in another transcript)"
+                   if r.repeated else "")
+        out.write(f"  {r.file}  {r.responses:>5} responses  {r.total:>13,} tokens  {top_txt}{sub_txt}"
+                  f"{rep_txt}\n")
     return 0
 
 
@@ -228,7 +245,7 @@ def print_budget(b, root, out, quiet=False):
     out.write("\nnot counted, as not in the repository: your ~/.claude/CLAUDE.md, memory and any CLAUDE.md "
               "above it\n")
     if b.outside:
-        out.write(f"not counted: {plural(len(b.outside), 'import')} outside the repository "
+        out.write(f"not counted, as outside the repository: {plural(len(b.outside), 'import or link')} "
                   f"({', '.join(sorted(set(b.outside)))})\n")
     return print_verdict(b, out, "\n")
 

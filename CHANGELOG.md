@@ -3,6 +3,30 @@
 The version follows `claude_context_cost.__version__`; each one has a `vX.Y.Z` tag on
 the commit that released it.
 
+## 1.7.0 — unreleased
+
+- A folder sum counts each response once: a resumed or forked session
+  repeats the responses it came from in its own file, and those were counted
+  twice. Its line says how many were already counted; `--json` adds
+  `"repeated"`.
+- A response with no `message.id` counts: its request id, its line's `uuid`
+  or its line number takes the id's place. Before, only the first of them
+  counted.
+- A file in a format this version does not know (no `type`, or assistant
+  lines with no `usage.input_tokens`) prints a warning, instead of counting
+  zero in silence. A field of the wrong type is skipped, not a traceback.
+- `--budget` lists a rule or `CLAUDE.md` that is a link to a file outside
+  the repository, and does not read it.
+- `--versions` runs git with `core.fsmonitor` off, and looks up only
+  absolute local paths: a relative path read another repository from the
+  current folder, and a UNC path (`//host/share`) reached another machine.
+  README and SECURITY say to read only your own transcripts with it.
+- Tests for a cut last line, an empty file, bytes that are not UTF-8, `git`
+  missing from the `PATH` and a repository with no commit.
+- A folder of many projects is summed faster, with the same output.
+- The demo page source (`vitrine/montar.py`, its test and `index.html`) is
+  in English.
+
 ## 1.6.4 — 2026-10-21
 
 - The demo page build also rejects an empty or non-text title, description

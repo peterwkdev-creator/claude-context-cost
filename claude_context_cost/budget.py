@@ -67,7 +67,7 @@ class Budget:
     start_tokens: int = 0
     start_limit: int = None
     over: list = field(default_factory=list)
-    outside: list = field(default_factory=list)   # imports that resolve outside the repository: not counted
+    outside: list = field(default_factory=list)   # imports and links that resolve outside the repository
 
     @property
     def ok(self):
@@ -158,11 +158,18 @@ def scan(root, bytes_per_token=DEFAULT_BYTES_PER_TOKEN):
             if sub is not None:
                 follow(p, sub, start, depth + 1)
 
-    found = [(root / n, True) for n in START_FILES if (root / n).is_file()]
+    def inside(path):
+        # a link to a file outside the repository is listed, never read
+        if path.resolve().is_relative_to(root):
+            return True
+        outside.append(path.relative_to(root).as_posix())
+        return False
+
+    found = [(root / n, True) for n in START_FILES if (root / n).is_file() and inside(root / n)]
     rules = root / ".claude" / "rules"
     if rules.is_dir():
-        found += [(p, not _has_paths(_read(p))) for p in sorted(rules.rglob("*.md")) if p.is_file()]
-    found += [(p, False) for p in _subfolders_claude_md(root)]
+        found += [(p, not _has_paths(_read(p))) for p in sorted(rules.rglob("*.md")) if p.is_file() and inside(p)]
+    found += [(p, False) for p in _subfolders_claude_md(root) if inside(p)]
     for start in (True, False):   # start-up files first: what they import loads at start-up
         for path, is_start in found:
             if is_start == start:

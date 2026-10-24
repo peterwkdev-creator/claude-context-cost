@@ -7,8 +7,11 @@ rendered as Claude Code renders it (see `budget.render`), equals the loaded
 text. On the author's machine (2026-10-11) only 290 of 2,863 distinct texts
 loaded still matched today's file: the others had changed or were gone.
 
-Git is only read (`log` and `cat-file`), with literal paths. Only `.md` files
-named by the transcript are looked up.
+Git is only read (`log` and `cat-file`), with literal paths and with
+`core.fsmonitor` off: a folder the transcript names may hold a git config that
+would run a program. Only `.md` files named by the transcript are looked up,
+and only by an absolute local path: a relative one would be read from the
+current folder, and a UNC one (`//host/share`) would reach another machine.
 """
 import json
 import os
@@ -95,7 +98,9 @@ def loaded_files(path):
 def _git(cwd, *args, stdin=None):
     try:
         # a user's log.showSignature would print signatures into the log's output
-        r = subprocess.run(["git", "-c", "log.showSignature=false", "--literal-pathspecs", "-C", cwd, *args],
+        # core.fsmonitor names a program to run: a repository's own config must not start it
+        r = subprocess.run(["git", "-c", "log.showSignature=false", "-c", "core.fsmonitor=false",
+                            "--literal-pathspecs", "-C", cwd, *args],
                            input=stdin,
                            capture_output=True, timeout=120)
     except (OSError, subprocess.SubprocessError):
@@ -146,6 +151,11 @@ def _history(top, rel):
     return out
 
 
+def _local(path):
+    """A path from the transcript that may be looked up: absolute, and not on another machine (UNC)."""
+    return not path.replace("\\", "/").startswith("//") and Path(path).is_absolute()
+
+
 def _same(a, b):
     # git may hold the file with LF while it was checked out with CRLF
     return a.replace("\r\n", "\n") == b.replace("\r\n", "\n")
@@ -167,6 +177,9 @@ def loaded_versions(path, bytes_per_token=None):
         seen[key] = v
         out.append(v)
         if not p.lower().endswith(".md"):
+            continue
+        if not _local(p):   # checked before any disk or git access
+            v.today = "not found"
             continue
         f = Path(p)
         if f.is_file():

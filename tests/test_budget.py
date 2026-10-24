@@ -119,6 +119,36 @@ class TestScan(unittest.TestCase):
         self.assertEqual(set(files), {"CLAUDE.md"})
         self.assertEqual(outside, ["~/.claude/mine.md", rel.as_posix()])
 
+    def test_a_rule_that_links_outside_the_repository_is_listed_not_read(self):
+        with tempfile.TemporaryDirectory() as other:
+            write(other, {"secret.md": "outside text\n", "inside.md": "x\n"})
+            repo = Path(self.root) / "repo"
+            write(repo, {"CLAUDE.md": "main\n", ".claude/rules/real.md": "real rule\n"})
+            try:
+                os.symlink(Path(other) / "secret.md", repo / ".claude" / "rules" / "linked.md")
+                os.symlink(Path(other) / "inside.md", repo / "CLAUDE.local.md")
+            except (OSError, NotImplementedError):
+                self.skipTest("this system does not let the tests create a symbolic link")
+            files, outside = by_name(repo)
+        self.assertEqual(set(files), {"CLAUDE.md", ".claude/rules/real.md"})
+        self.assertEqual(sorted(outside), [".claude/rules/linked.md", "CLAUDE.local.md"])
+
+    @unittest.skipUnless(os.name == "nt", "a junction is Windows' link that needs no privilege")
+    def test_a_rules_folder_that_is_a_junction_outside_is_listed_not_read(self):
+        import _winapi
+        with tempfile.TemporaryDirectory() as other:
+            write(other, {"secret.md": "outside text\n"})
+            repo = Path(self.root) / "repo"
+            write(repo, {"CLAUDE.md": "main\n"})
+            (repo / ".claude").mkdir()
+            _winapi.CreateJunction(str(other), str(repo / ".claude" / "rules"))
+            try:
+                files, outside = by_name(repo)
+            finally:
+                os.rmdir(repo / ".claude" / "rules")   # the junction only, not what it points to
+        self.assertEqual(set(files), {"CLAUDE.md"})
+        self.assertEqual(outside, [".claude/rules/secret.md"])
+
 
 class TestCheckBudget(unittest.TestCase):
 

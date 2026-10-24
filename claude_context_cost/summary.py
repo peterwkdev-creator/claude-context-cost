@@ -4,12 +4,16 @@ A source is the same across transcripts when its kind and name are: `tool: Read`
 everywhere, the user's own `~/.claude/CLAUDE.md` in every project. A project's
 own file (`CLAUDE.md`, `.claude/rules/x.md`) is named relative to the project
 folder, so the same name in two projects is two files: those keep their project.
+
+A resumed or forked session starts its own file with the responses of the one
+it came from, under the same `message.id`: each response is summed once, in
+the first transcript read (oldest first) that has it.
 """
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .attribute import analyze
+from .attribute import Source, analyze
 
 LOCAL_KINDS = ("claude.md", "rule", "path rule")
 
@@ -42,6 +46,7 @@ class Row:
     compactions: int
     total: int
     top: object = None   # its costliest Source, or None
+    repeated: int = 0    # responses left out: already summed from another transcript
 
 
 @dataclass
@@ -71,6 +76,39 @@ def _transcripts(folder):
             sorted(folder.glob("*/subagents/*.jsonl"), key=by_time))
 
 
+def _key(path, r):
+    # an id made from the line number (no message.id, request id or uuid) is only unique in its file
+    return (str(path), r.id) if r.id.startswith("line ") else r.id
+
+
+def _sources_of(rep, keep):
+    """The sources of only the responses in keep, summed as `attribute` sums a whole transcript."""
+    out, prev = {}, None
+
+    def source(k):
+        if k not in out:
+            out[k] = Source(*k)
+        return out[k]
+
+    for r in rep.responses:
+        before = {} if (r.segment_start or prev is None) else prev.ledger
+        prev = r
+        if id(r) not in keep:
+            continue
+        for k in set(r.ledger) | set(before):   # each ledger is the previous one plus what entered
+            source(k).entered += r.ledger.get(k, 0) - before.get(k, 0)
+        for k, v in r.ledger.items():
+            source(k).cost += v
+            source(k).responses += 1
+        for i in r.entered:
+            s = source(i.key)
+            s.bytes += i.bytes
+            s.chars += i.chars
+            s.opaque += i.opaque
+            s.how[i.how] = s.how.get(i.how, 0) + 1
+    return {k: s for k, s in out.items() if s.entered or s.cost}
+
+
 def summarize(path):
     """Sum every transcript in a project folder, or in each project of a folder of projects.
 
@@ -89,13 +127,20 @@ def summarize(path):
             if s or a:
                 projects.append((d.name, s, a))
     summary = Summary(str(folder), [p for p, _, _ in projects], [])
+    seen = set()   # every response summed so far
     for project, s, a in projects:
         for f, is_subagent in [(f, False) for f in s] + [(f, True) for f in a]:
             rep = analyze(f)
-            top = max(rep.sources.values(), key=lambda x: x.cost, default=None)
+            keys = [_key(f, r) for r in rep.responses]
+            counted = [r for r, k in zip(rep.responses, keys) if k not in seen]
+            seen.update(keys)
+            repeated = len(rep.responses) - len(counted)
+            sources = _sources_of(rep, {id(r) for r in counted}) if repeated else rep.sources
+            top = max(sources.values(), key=lambda x: x.cost, default=None)
             summary.rows.append(Row(f.name, project, f.parent.parent.name if is_subagent else "",
-                                    len(rep.responses), rep.compactions, rep.total, top))
-            for src in rep.sources.values():
+                                    len(counted), rep.compactions, sum(r.context for r in counted), top,
+                                    repeated))
+            for src in sources.values():
                 key = (src.kind, src.name, project if _is_local(src.kind, src.name) else "")
                 t = summary.sources.get(key)
                 if t is None:

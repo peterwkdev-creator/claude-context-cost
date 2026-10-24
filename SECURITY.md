@@ -21,5 +21,11 @@ the "Unexpected result" template.
 The tool only reads: the transcripts you pass it, and with `--budget` or
 `--versions` the files of a repository and its git history (`git log` and
 `git cat-file`, never a command that writes). It has no dependencies, makes no
-network request and writes no file. The page in the browser runs the same
-library in Pyodide; the file you choose is never uploaded.
+network request and writes no file.
+
+`--versions` runs git in the folders a transcript names, so read only your
+own transcripts with it. Git runs there with `core.fsmonitor` off, and a path
+that is relative or on another machine (`//host/share`) is not looked up.
+
+The page in the browser runs the same library in Pyodide; the file you choose
+is never uploaded.

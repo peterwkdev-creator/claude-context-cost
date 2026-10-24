@@ -267,5 +267,85 @@ class TestVersionsCli(unittest.TestCase):
             self.assertIn("--versions", err)
 
 
+@unittest.skipUnless(HAS_GIT, "git is not installed")
+class TestVersionsSafety(unittest.TestCase):
+    """The transcript names the folders: git runs safely there, and only on absolute local paths."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.r = Repo(tmp.name)
+
+    def test_every_git_call_turns_fsmonitor_off(self):
+        from unittest import mock
+        from claude_context_cost import versions
+        real, calls = subprocess.run, []
+
+        def spy(args, **kw):
+            calls.append(args)
+            return real(args, **kw)
+
+        f = self.r.write("CLAUDE.md", "text\n")
+        self.r.commit("2026-10-01T12:00:00+00:00")
+        self.r.load("2026-10-02T12:00:00Z", f, "text")
+        with mock.patch.object(versions.subprocess, "run", spy):
+            (v,) = loaded_versions(self.r.transcript(), 2.0)
+        self.assertTrue(v.commit)
+        self.assertTrue(calls)
+        for args in calls:
+            i = args.index("-C")
+            self.assertIn(["-c", "core.fsmonitor=false"], [args[j:j + 2] for j in range(i)])
+
+    def test_a_relative_path_is_not_read_from_the_current_folder(self):
+        self.r.write("CLAUDE.md", "text\n")
+        self.r.commit("2026-10-01T12:00:00+00:00")
+        self.r.load("2026-10-02T12:00:00Z", "CLAUDE.md", "text")
+        here = os.getcwd()
+        os.chdir(self.r.root)
+        self.addCleanup(os.chdir, here)
+        (v,) = loaded_versions(self.r.transcript(), 2.0)
+        self.assertEqual((v.git, v.commit, v.today), (False, "", "not found"))
+
+    def test_a_unc_path_is_refused_before_any_disk_or_git_access(self):
+        from unittest import mock
+        from claude_context_cost import versions
+        for p in ("//host/share/CLAUDE.md", "\\\\host\\share\\CLAUDE.md", "//?/C:/x/CLAUDE.md"):
+            self.r.lines = []
+            self.r.load("2026-10-02T12:00:00Z", p, "text")
+            t = self.r.transcript()
+            touched = mock.Mock(side_effect=AssertionError(f"{p} was looked up"))
+            with self.subTest(path=p), mock.patch.object(Path, "is_file", touched), \
+                    mock.patch.object(versions, "_git", touched):
+                (v,) = loaded_versions(t, 2.0)
+                self.assertEqual((v.git, v.today), (False, "not found"))
+
+    def test_a_repository_with_no_commit_has_git_and_no_version(self):
+        f = self.r.write("CLAUDE.md", "text\n")
+        self.r.load("2026-10-02T12:00:00Z", f, "text")
+        (v,) = loaded_versions(self.r.transcript(), 2.0)
+        self.assertEqual((v.git, v.commit, v.today), (True, "", "same"))
+        out = io.StringIO()
+        print_versions([v], out)
+        self.assertIn("not committed", out.getvalue())
+
+
+class TestVersionsWithoutGit(unittest.TestCase):
+
+    def test_git_missing_from_the_path_is_no_git_not_an_error(self):
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Path(tmp) / "CLAUDE.md"
+            f.write_text("text\n", encoding="utf-8")
+            t = Path(tmp) / "session.jsonl"
+            att = {"type": "instructions", "files": [{"path": str(f), "type": "Project", "content": "text"}]}
+            t.write_text(json.dumps({"type": "attachment", "timestamp": "2026-10-02T12:00:00Z", "cwd": tmp,
+                                     "rendered": "text", "attachment": att}) + "\n", encoding="utf-8")
+            empty = Path(tmp) / "bin"
+            empty.mkdir()
+            with mock.patch.dict(os.environ, {"PATH": str(empty)}):
+                (v,) = loaded_versions(t, 2.0)
+        self.assertEqual((v.git, v.commit, v.today), (False, "", "same"))
+
+
 if __name__ == "__main__":
     unittest.main()

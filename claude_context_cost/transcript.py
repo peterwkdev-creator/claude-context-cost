@@ -17,8 +17,14 @@ to 2.1.293, October 2026):
   at the moment it actually loaded.
 - After a compaction, the messages it preserves are written again with their
   old ids: they are back in the context, not new responses.
+
+A file whose lines this reader does not recognise (no `type`, or assistant
+lines with no `message.usage.input_tokens`) gets a warning on stderr: its
+responses would otherwise be counted as zero without a word.
 """
 import json
+import os
+import sys
 from dataclasses import dataclass, field
 
 USER_FILES = {"User", "AutoMem"}
@@ -172,8 +178,20 @@ def _content_text(c):
     return "".join(x.get("text") or "" for x in c or [] if isinstance(x, dict) and x.get("type") == "text")
 
 
+def _dict(x):
+    return x if isinstance(x, dict) else {}
+
+
+def _tokens(x):
+    return x if isinstance(x, int) and not isinstance(x, bool) else 0
+
+
+def _warn(path, text):
+    sys.stderr.write(f"claude-context-cost: warning: {os.path.basename(str(path))}: {text}\n")
+
+
 def _user_items(entry, tool_names):
-    c = (entry.get("message") or {}).get("content")
+    c = _dict(entry.get("message")).get("content")
     if entry.get("isCompactSummary"):
         return [_item("summary", "compaction", _content_text(c))]
     who = "meta" if entry.get("isMeta") else "user"
@@ -213,6 +231,7 @@ def read(path):
     responses, pending = [], []
     seen_segment, seen_ever, tool_names = set(), set(), {}
     cwd, segment_start, compactions, bad = "", True, 0, 0
+    objects, typed, assistants, known = 0, 0, 0, 0   # to tell a format this reader does not know
     skip_side = not _subagent_only(path)   # in a session's transcript, sidechains are other contexts
     with open(path, encoding="utf-8", errors="replace") as fh:
         for n, line in enumerate(fh, 1):
@@ -226,15 +245,23 @@ def read(path):
                 continue
             if skip_side and e.get("isSidechain"):
                 continue
-            cwd = e.get("cwd") or cwd
+            objects += 1
+            cwd = e.get("cwd") if isinstance(e.get("cwd"), str) and e.get("cwd") else cwd
             t = e.get("type")
+            typed += isinstance(t, str)
             if t == "system" and e.get("subtype") == "compact_boundary":
                 compactions += 1
                 pending, seen_segment, segment_start = [], set(), True
             elif t == "assistant":
-                m = e.get("message") or {}
-                mid = m.get("id")
-                blocks = [b for b in m.get("content") or [] if isinstance(b, dict)]
+                m = _dict(e.get("message"))
+                u = _dict(m.get("usage"))
+                assistants += 1
+                known += "input_tokens" in u
+                # one response is one message.id; with none, the request id (the same on every block of
+                # a response), then the line's own uuid, then its number: never one shared None
+                mid = str(m.get("id") or e.get("requestId") or e.get("uuid") or f"line {n}")
+                content = m.get("content")
+                blocks = [b for b in content if isinstance(b, dict)] if isinstance(content, list) else []
                 for b in blocks:
                     if b.get("type") == "tool_use":
                         tool_names[b.get("id")] = b.get("name") or "?"
@@ -243,20 +270,25 @@ def read(path):
                 if mid in seen_ever:            # preserved by the compaction, written again
                     pending += [_item("output", "kept by compaction", _block_text(b)) for b in blocks]
                     continue
-                u = m.get("usage") or {}
-                ctx = (u.get("input_tokens") or 0) + (u.get("cache_read_input_tokens") or 0) \
-                    + (u.get("cache_creation_input_tokens") or 0)
+                ctx = _tokens(u.get("input_tokens")) + _tokens(u.get("cache_read_input_tokens")) \
+                    + _tokens(u.get("cache_creation_input_tokens"))
                 if not ctx:
                     continue                    # <synthetic> and other lines with no API call
                 seen_segment.add(mid)
                 seen_ever.add(mid)
-                responses.append(Response(mid, m.get("model") or "", ctx, u.get("output_tokens") or 0,
-                                          n, pending, segment_start))
+                responses.append(Response(mid, str(m.get("model") or ""), ctx,
+                                          _tokens(u.get("output_tokens")), n, pending, segment_start))
                 pending, segment_start = [], False
             elif t == "user":
                 pending += _user_items(e, tool_names)
             elif t == "attachment":
                 text = _rendered_text(e.get("rendered")) if e.get("rendered") else ""
                 if text:
-                    pending += _attachment_items(e.get("attachment") or {}, text, cwd)
+                    pending += _attachment_items(_dict(e.get("attachment")), text, cwd)
+    if objects and not typed:
+        _warn(path, f"{objects:,} JSON lines and none has a \"type\": not a Claude Code transcript, or a "
+                    f"format this version does not know; nothing is counted")
+    elif assistants and not known:
+        _warn(path, f"{assistants:,} assistant lines and none has \"message.usage.input_tokens\": a "
+                    f"transcript format this version does not know; their responses are not counted")
     return Transcript(str(path), responses, compactions, bad)
